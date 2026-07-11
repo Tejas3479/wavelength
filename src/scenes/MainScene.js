@@ -838,7 +838,8 @@ export class MainScene extends Phaser.Scene {
       this.time.delayedCall(2000, () => {
         if (this.gameState === STATES.UPGRADE) {
           const randomIdx = Math.floor(Math.random() * 3);
-          this.logTerminal(`[AGENT] UPGRADE NODE ACCESSED. Auto-installing firmware card #${randomIdx + 1}.`);
+          this.logTerminal('[AGENT] THOUGHT: Upgrade terminal cleared. Auto-installing firmware card.');
+          this.logTerminal(`[AGENT] ACTION: Select card #${randomIdx + 1} (${this.upgradeSystem.activeCards[randomIdx].title}).`);
           this.upgradeSystem.handleSelect(randomIdx);
         }
       });
@@ -861,14 +862,15 @@ export class MainScene extends Phaser.Scene {
 
     // 1. Perception & Logging throttle
     if (!this.lastAgentLogTime) this.lastAgentLogTime = 0;
-    const logInterval = 2000; // log every 2 seconds
+    const logInterval = 2500; // log every 2.5 seconds
     const shouldLog = (time - this.lastAgentLogTime) > logInterval;
 
     // 2. Tactical reasoning: triggers EMP if hazard block is in our steering path
     if (this.hasEMP && this.empCooldown <= 0 && !this.isEMPActive) {
       const inHazard = this.signalBand.isNeedleInHazard(currentVal);
       if (inHazard) {
-        this.logTerminal('[AGENT] WARNING: needle in high-static hazard block! Actuating EMP capacitor.');
+        this.logTerminal('[AGENT] THOUGHT: Warning! Needle in static hazard block. Shield damage imminent.');
+        this.logTerminal('[AGENT] ACTION: Trigger active CLI script /emp.');
         this.triggerEMP();
       }
     }
@@ -878,7 +880,8 @@ export class MainScene extends Phaser.Scene {
       this.lastAgentDecryptSolveTime = time;
       this.time.delayedCall(1500, () => {
         if (this.isDecryptionActive && this.decryptionCorrectKey) {
-          this.logTerminal(`[AGENT] CRYPTO NODE DETECTED. Submitting decryption key: ${this.decryptionCorrectKey}`);
+          this.logTerminal('[AGENT] THOUGHT: Crypto node detected. Deciphering bypass sequence.');
+          this.logTerminal(`[AGENT] ACTION: Submit passcode key "${this.decryptionCorrectKey}".`);
           this.submitDecryption(this.decryptionCorrectKey);
         }
       });
@@ -888,25 +891,27 @@ export class MainScene extends Phaser.Scene {
     }
 
     // 4. Steering Actuator
-    // Simple proportional control with dampening based on distance
     if (absDiff > cleanZone) {
       if (diff > 0) {
         this.dialController.velocity += this.dialController.acceleration * dt * 0.85;
         if (shouldLog) {
-          this.logTerminal(`[AGENT] Target drift right (+${absDiff.toFixed(1)}). Steering RIGHT.`);
+          this.logTerminal(`[AGENT] THOUGHT: Needle is at ${currentVal.toFixed(1)}, target is at ${targetVal.toFixed(1)} (drift: +${absDiff.toFixed(1)}).`);
+          this.logTerminal('[AGENT] ACTION: Steer dial RIGHT.');
           this.lastAgentLogTime = time;
         }
       } else {
         this.dialController.velocity -= this.dialController.acceleration * dt * 0.85;
         if (shouldLog) {
-          this.logTerminal(`[AGENT] Target drift left (-${absDiff.toFixed(1)}). Steering LEFT.`);
+          this.logTerminal(`[AGENT] THOUGHT: Needle is at ${currentVal.toFixed(1)}, target is at ${targetVal.toFixed(1)} (drift: -${absDiff.toFixed(1)}).`);
+          this.logTerminal('[AGENT] ACTION: Steer dial LEFT.');
           this.lastAgentLogTime = time;
         }
       }
     } else {
-      this.dialController.velocity *= 0.65; // slow down needle to stabilize
+      this.dialController.velocity *= 0.65;
       if (shouldLog) {
-        this.logTerminal(`[AGENT] Signal locks maintained. Holding alignment.`);
+        this.logTerminal('[AGENT] THOUGHT: Signal resonance established. Needle centered.');
+        this.logTerminal('[AGENT] ACTION: Hold dial alignment.');
         this.lastAgentLogTime = time;
       }
     }
@@ -915,13 +920,15 @@ export class MainScene extends Phaser.Scene {
     const isWarpTimeCritical = this.scoreTimer.timeLeft < 1.6;
     if (absDiff <= cleanZone) {
       if (!this.lastAgentLockTime || (time - this.lastAgentLockTime > 800)) {
-        this.logTerminal('[AGENT] Optimal resonance established. Initiating lock command.');
+        this.logTerminal('[AGENT] THOUGHT: Optimal resonance established. Aligning within clean lock zone.');
+        this.logTerminal('[AGENT] ACTION: Execute frequency lock command.');
         this.attemptLock();
         this.lastAgentLockTime = time;
       }
     } else if (isWarpTimeCritical && absDiff <= standardZone) {
       if (!this.lastAgentLockTime || (time - this.lastAgentLockTime > 800)) {
-        this.logTerminal('[AGENT] Clock critical. Standard alignment lock triggered.');
+        this.logTerminal(`[AGENT] THOUGHT: Clock critical (${this.scoreTimer.timeLeft.toFixed(1)}s left) and needle is within standard band.`);
+        this.logTerminal('[AGENT] ACTION: Execute standard frequency lock command.');
         this.attemptLock();
         this.lastAgentLockTime = time;
       }

@@ -32,13 +32,16 @@ To survive, you must steer the dial, type bypass scripts in the command-line con
 
 ### 2. Tactical Command CLI Console
 Press `~` (backtick) or `/` at any time to focus the console at the bottom of the screen. Focus suspends dial keys so you can type system scripts:
-- `/help` $\rightarrow$ Lists all available terminal commands.
-- `/diagnose` $\rightarrow$ Prints active AI Jammer status variables (Phase, Confidence, Signature).
-- `/spoof <val>` $\rightarrow$ Spoofs the Jammer tracking database by injecting fake coordinate offsets.
-- `/overclock` $\rightarrow$ Triggers temporary +50% dial speed (requires *Overclock Grid* upgrade).
-- `/emp` $\rightarrow$ Discharges capacitor to freeze target oscillations for 2.0 seconds (requires *EMP Capacitor* upgrade).
-- `/shield` $\rightarrow$ Queries active hardware shields status.
-- `/endless` $\rightarrow$ Toggles survival mode (score threshold bypassed).
+- `/help` → Lists all available terminal commands.
+- `/diagnose` → Prints active AI Jammer status variables (Phase, Confidence, Signature).
+- `/spoof <val>` → Spoofs the Jammer tracking database by injecting fake coordinate offsets.
+- `/overclock` → Triggers temporary +50% dial speed (requires *Overclock Grid* upgrade).
+- `/emp` → Discharges capacitor to freeze target oscillations for 2.0 seconds (requires *EMP Capacitor* upgrade).
+- `/shield` → Queries active hardware shields status.
+- `/endless` → Toggles survival mode (score threshold bypassed).
+- `/scan` → Initiates a sub-carrier frequency scan sweep to locate target center.
+- `/decrypt` → Spawns a cryptographic puzzle that awards a static Shield on solve.
+- `/submit <key>` → Submits the correct solution key to bypass the grid lock.
 
 ### 3. Roguelite Upgrade Terminal
 Every **3 successful locks**, the terminal pauses for a firmware upgrade choice. Pick one card:

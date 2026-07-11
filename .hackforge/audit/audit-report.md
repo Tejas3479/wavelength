@@ -1,96 +1,104 @@
-<!-- Source: hackforge-audit | Version: v1 | Checkpoint: audit-complete | Dependencies: none -->
 # Audit Report: Wavelength - Adaptive Hacking Terminal
 
-## Summary
-- **Files scanned:** 15
-- **Issues:** 2 critical, 2 high, 2 medium, 2 low
-- **Design compliance:** 92%
-- **Test coverage:** Missing (no unit/integration tests configured)
-- **Security issues:** 0 (clean static scan, no exposed keys, no innerHTML/eval use)
+<!-- Source: hackforge-audit | Confidence: STRONG | Version: v2 | Checkpoint: audit-report-final -->
+
+This report evaluates the **Wavelength** retro-analog terminal hacking arcade game codebase for Parsewave Game Jam 2026. The system was inspected end-to-end to verify architectural consistency, feature reachability, performance, and stability.
 
 ---
 
-## Critical Issues
+## 1. Full Audit Verdict
+**CRITICAL DEFECTS DETECTED (NOT READY FOR SUBMISSION)**
+While the game boasts a stunning aesthetic, fully functional Web Audio procedural synthesis, and a solid architectural separation between Phaser scenes and modules, it suffers from a **critical runtime reference crash** during the Jammer analysis sweep (which runs at the end of the very first round) and a **memory leak/dangling listener bug** upon scene reboots. 
 
-| # | File | Issue | Severity | Impact | Fix |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | [MainScene.js](file:///c:/Users/tejas/Downloads/wavelength/src/scenes/MainScene.js) | Run-to-Run State Leak in Upgrades | **CRITICAL** | Upgrades bought in previous runs (e.g. flywheel brakes, widened aperture) persist into new games, making consecutive runs trivial. | Add a reset block under the `STATES.TITLE` transition in `MainScene.js` to reset `dialController.speed`, `dialController.friction`, `signalBand.width`, and `jammer.telemetryDampening`. |
-| 2 | [MainScene.js](file:///c:/Users/tejas/Downloads/wavelength/src/scenes/MainScene.js) | Run-to-Run State Leak in Jammer Phase | **CRITICAL** | Jammer phase and confidence are not reset to default values on game restart, causing Phase 3 hazards to spawn immediately in round 1 of a new game. | Explicitly reset `jammer.phase = 1` and `jammer.confidence = 20` inside the `STATES.TITLE` transition block in `MainScene.js`. |
-
----
-
-## High-Priority Issues
-
-| # | File | Issue | Severity | Impact | Fix |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 3 | [TerminalCLI.js](file:///c:/Users/tejas/Downloads/wavelength/src/modules/TerminalCLI.js) | CLI Focus Bypass in Menus | **HIGH** | Pressing `~` or `/` in menus (Title, GameOver, Victory) enables and focuses the CLI, allowing commands to run out-of-order. | Restrict the Phaser keyboard listeners for backtick/slash in `TerminalCLI.js` to only execute `focus()` when `scene.gameState === 'PLAYING'`. |
-| 4 | [index.html](file:///c:/Users/tejas/Downloads/wavelength/index.html) | Fixed Shell Size (Non-responsive Layout) | **HIGH** | The `.terminal-shell` uses fixed dimensions (`800px` x `650px`) with body `overflow: hidden`, causing clipping and rendering the game unplayable on smaller/mobile viewports. | Add a responsive scale rule using CSS transforms or container queries to scale `.terminal-shell` down proportionally on smaller screens. |
+Once these defects are corrected, the codebase will be outstanding, matching high-end production quality.
 
 ---
 
-## Medium-Priority Issues
+## 2. Critical Issues
 
-| # | File | Issue | Severity | Impact | Fix |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 5 | [MainScene.js](file:///c:/Users/tejas/Downloads/wavelength/src/scenes/MainScene.js) | Overclock / EMP State Overwrites | **MEDIUM** | If a round transitions to `ANALYSIS` while overclock or EMP is active, the Jammer overrides wave speeds, causing incorrect restorations when the timers expire. | Save the newly calculated speed in `savedBandSpeed` during round transitions if overclock or EMP is active. |
-| 6 | [MainScene.js](file:///c:/Users/tejas/Downloads/wavelength/src/scenes/MainScene.js) | Typewriter Stuck State on Game End | **MEDIUM** | If a terminal typewriter is typing when the game ends, `isLoggingTypewriter` remains `true` forever, freezing console logs in all subsequent games. | Reset `isLoggingTypewriter = false` and empty the log queue in the `STATES.TITLE` transition block and when the typewriter timer is aborted. |
-
----
-
-## Low-Priority & Code Quality Issues
-
-| # | File | Issue | Severity | Impact | Fix |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 7 | [AudioManager.js](file:///c:/Users/tejas/Downloads/wavelength/src/modules/AudioManager.js) | Unused parameter `insideBand` | **LOW** | Code cleanliness issue. Unused parameters degrade readability. | Remove `insideBand` parameter from `updateTuning()` function signature and references. |
-| 8 | [.gitignore](file:///c:/Users/tejas/Downloads/wavelength/.gitignore) | Missing environment variable pattern | **LOW** | Security warning: local environment configurations (.env) could accidentally be committed. | Add `.env*` to the `.gitignore` patterns. |
-
----
-
-## Design Drift & UX Upgrades
-
-| Component | Target / Expected | Actual | Upgrade / Fix |
-| :--- | :--- | :--- | :--- |
-| **Audio Engine** | Skeuomorphic immersive chiptunes. | Music stays bright and unfiltered even in menu lists. | **Muffled Music in Menus:** Smoothly low-pass the bass sequencer to 220Hz when tuning is stopped (menus/upgrades), opening it back up when playing. |
-| **Bouncing EQ** | Vector feedback matching chiptunes. | EQ is static Cyan regardless of threat phase. | **Phase-Dynamic EQ Colors:** Change EQ color to warning Orange in Phase 2, and warning Magenta/Red in Phase 3. |
-| **Visual Styling** | Phosphor scanning grid. | Scanlines are always active. | **Scanlines Toggle CLI:** Add a command `/scanlines` to toggle scanning grid opacity, aiding accessibility for sensitive users. |
+### [CRITICAL] ReferenceError in Jammer Scan Sweep
+* **Location:** [Jammer.js](file:///c:/Users/tejas/Downloads/wavelength/src/modules/Jammer.js#L307)
+* **Symptom:** During the Jammer's calibration phase (`STATES.ANALYSIS`), `Jammer.update()` calls `render()`. On line 307, the code tries to compute the coordinates of sweep rays:
+  ```javascript
+  const targetX = lineXStart + (pct / 100) * trackWidth;
+  ```
+  Since `trackWidth` is never declared or imported in `Jammer.js`, a `ReferenceError` is thrown, crashing the application.
+* **Impact:** 100% reproducible crash at the end of the first round. The game becomes completely unplayable.
+* **Fix:** Replace `trackWidth` with `600` (the actual width between `lineXStart = 100` and `lineXEnd = 700`):
+  ```javascript
+  const targetX = lineXStart + (pct / 100) * 600;
+  ```
 
 ---
 
-## Repair Prompts
+## 3. High-Priority Issues
 
-### Fix 1: State Reset & Typewriter Fix in MainScene.js
-> Fix run-to-run state leaks by resetting upgrades, jammer variables, and typewriter flags in `MainScene.js` transitions under `STATES.TITLE`:
-```javascript
-      // Reset upgraded parameters to defaults
-      if (this.dialController) {
-        this.dialController.speed = 40.0;
-        this.dialController.friction = 0.82;
-      }
-      if (this.signalBand) {
-        this.signalBand.width = 12.0;
-      }
-      if (this.jammer) {
-        this.jammer.telemetryDampening = 1.0;
-        this.jammer.phase = 1;
-        this.jammer.confidence = 20;
-      }
-      this.isLoggingTypewriter = false;
-      if (this.logQueue) this.logQueue = [];
-```
+### [HIGH] EventBus Listener Leaks and Dangling Callbacks
+* **Location:** [EventBus.js](file:///c:/Users/tejas/Downloads/wavelength/src/modules/EventBus.js#L30-L33) & [AudioManager.js](file:///c:/Users/tejas/Downloads/wavelength/src/modules/AudioManager.js#L545-L547)
+* **Symptom:** `AudioManager` registers callbacks on the global `EventBus` at startup. During a scene restart, `audioManager.destroy()` attempts to clear these listeners by calling:
+  ```javascript
+  EventBus.off('COMBO_UPDATED');
+  EventBus.off('LOCK_MISS');
+  EventBus.off('ROUND_RESET');
+  ```
+  However, `EventBus.off` is defined to require the specific `callback` reference. Calling it with only one argument fails to remove anything.
+* **Impact:** Re-instantiating the scene creates a new `AudioManager` and registers more listeners, leaving the old ones alive. These dangling callbacks trigger errors when they attempt to query a closed `AudioContext`, causing console crashes and cumulative memory leaks.
+* **Fix:** Modify `EventBus.off()` to empty the listener array if no callback is supplied:
+  ```javascript
+  off(eventName, callback) {
+    if (!this.listeners[eventName]) return;
+    if (callback === undefined) {
+      this.listeners[eventName] = [];
+    } else {
+      this.listeners[eventName] = this.listeners[eventName].filter(cb => cb !== callback);
+    }
+  }
+  ```
 
-### Fix 2: CLI Menu Focus Restriction in TerminalCLI.js
-> Restrict CLI focus hooks to playing state inside `TerminalCLI.js`:
-```javascript
-    this.scene.input.keyboard.on('keydown-BACKTICK', (event) => {
-      if (this.scene.gameState === 'PLAYING') {
-        event.preventDefault();
-        this.focus();
-      }
-    });
-    this.scene.input.keyboard.on('keydown-SLASH', (event) => {
-      if (this.scene.gameState === 'PLAYING') {
-        event.preventDefault();
-        this.focus();
-      }
-    });
-```
+### [HIGH] Victory Target Score Mismatch with Documentation
+* **Location:** [MainScene.js](file:///c:/Users/tejas/Downloads/wavelength/src/scenes/MainScene.js#L752)
+* **Symptom:** The `README.md` and `HOW TO PLAY` screen state: `"Reach 15 successful locks to win."` However, the code triggers victory at `scoreTimer.score >= 10`.
+* **Impact:** Because a single "Clean Lock" can yield up to 8 points with a x4 combo multiplier, the player can win the game in only 3-5 locks. The game is cut short, and the player rarely experiences Phase 2 or Phase 3 of the adaptive Jammer.
+* **Fix:** Align the logic with the documentation by checking for lock count instead of score:
+  ```javascript
+  if (this.upgradeCount >= 15 && !this.isEndlessMode) {
+    this.transitionToState(STATES.VICTORY);
+  }
+  ```
+
+---
+
+## 4. Medium-Priority Improvements
+
+### [MEDIUM] Typewriter Sound Loop Runaway on Quick Restart
+* **Location:** [MainScene.js](file:///c:/Users/tejas/Downloads/wavelength/src/scenes/MainScene.js#L839-L870)
+* **Symptom:** The logging typewriter is driven by a Phaser time event. If the game is restarted while the typewriter is printing, the time event is not cancelled, and continues printing lines, which can result in overlapping text glitches.
+* **Fix:** Store a reference to the active Phaser time event and cancel it during cleanups:
+  ```javascript
+  if (this.typewriterTimeEvent) {
+    this.typewriterTimeEvent.destroy();
+    this.typewriterTimeEvent = null;
+  }
+  ```
+
+### [MEDIUM] Undocumented Hack-Action CLI Commands in README
+* **Location:** [README.md](file:///c:/Users/tejas/Downloads/wavelength/README.md)
+* **Symptom:** Tactical CLI commands like `/scan`, `/decrypt`, and `/submit` are fully implemented in the code (yielding Shield restore points) and listed in `/help`, but are completely missing from the README command table.
+* **Fix:** Document `/scan`, `/decrypt`, and `/submit` in the README table to maintain documentation parity.
+
+---
+
+## 5. High-Value Upgrades (Premium Touch)
+
+1. **Muffled Soundscapes in Menus (Skeuomorphic Audio):**
+   * Low-pass filter the bass sequencer down to 220Hz when the player is in menus (`TITLE`, `GAMEOVER`, `VICTORY`), opening it up dynamically to 1200Hz as they approach target alignment in `PLAYING` state.
+2. **Phase-Dynamic Spectrum Colors:**
+   * Modify the HUD's bouncing equalizer spectrum color to match the current threat phase (Teal for Phase 1, Orange for Phase 2, Magenta/Red for Phase 3) to heighten visual tension.
+3. **Endless Mode HUD Badge:**
+   * Display a glowing orange `[ENDLESS MODE]` status indicator on the dashboard whenever `/endless` is active, letting the user know they've bypassed the score limits.
+
+---
+
+## 6. Final Submission Readiness Verdict
+**STATUS: NOT READY**
+The game has high technical credibility, but the `trackWidth` crash and `EventBus` listener leak are blocking issues. Fixing these issues and updating the documentation/traces will yield a 100% judge-ready, outstanding submission.

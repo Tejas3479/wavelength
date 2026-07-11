@@ -29,7 +29,11 @@ class EventBusClass {
    */
   off(eventName, callback) {
     if (!this.listeners[eventName]) return;
-    this.listeners[eventName] = this.listeners[eventName].filter(cb => cb !== callback);
+    if (callback === undefined) {
+      this.listeners[eventName] = [];
+    } else {
+      this.listeners[eventName] = this.listeners[eventName].filter(cb => cb !== callback);
+    }
   }
 
   /**

@@ -215,6 +215,14 @@ export class MainScene extends Phaser.Scene {
     this.gaugeGraphics = this.add.graphics();
     this.add.text(650, 42, 'HARDWARE FUSES', { fontFamily: 'Space Mono', fontSize: '9px', color: '#536271' }).setOrigin(0.5);
     this.add.text(650, 118, 'SHIELD GRID', { fontFamily: 'Space Mono', fontSize: '8px', color: '#8f9aa6' }).setOrigin(0.5);
+
+    // Endless mode HUD status indicator
+    this.endlessBadgeText = this.add.text(400, 30, '[ ENDLESS MODE ACTIVE ]', {
+      fontFamily: 'Space Mono',
+      fontSize: '11px',
+      color: '#ffaa00',
+      align: 'center'
+    }).setOrigin(0.5).setVisible(false);
   }
 
   setupScreenOverlays() {
@@ -404,6 +412,13 @@ export class MainScene extends Phaser.Scene {
       this.decryptionKeys = [];
       this.decryptionCorrectKey = '';
       this.decryptionAttempts = 0;
+      if (this.typewriterTimeEvent) {
+        this.typewriterTimeEvent.destroy();
+        this.typewriterTimeEvent = null;
+      }
+      if (this.endlessBadgeText) {
+        this.endlessBadgeText.setVisible(false);
+      }
       if (this.scanGraphics) this.scanGraphics.clear();
       EventBus.emit('ROUND_RESET');
       
@@ -749,7 +764,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   checkProgressTransitions() {
-    if (this.scoreTimer.score >= 10 && !this.isEndlessMode) {
+    if (this.upgradeCount >= 15 && !this.isEndlessMode) {
       this.transitionToState(STATES.VICTORY);
     } else if (this.upgradeCount > 0 && this.upgradeCount % 3 === 0) {
       this.transitionToState(STATES.UPGRADE);
@@ -836,7 +851,7 @@ export class MainScene extends Phaser.Scene {
     const currentLineIdx = this.terminalLogs.length - 1;
     let charIdx = 0;
     
-    const timer = this.time.addEvent({
+    this.typewriterTimeEvent = this.time.addEvent({
       delay: 15,
       repeat: fullMsg.length - 1,
       callback: () => {
@@ -847,7 +862,10 @@ export class MainScene extends Phaser.Scene {
           this.gameState !== STATES.UPGRADE
         ) {
           this.isLoggingTypewriter = false;
-          timer.destroy();
+          if (this.typewriterTimeEvent) {
+            this.typewriterTimeEvent.destroy();
+            this.typewriterTimeEvent = null;
+          }
           return;
         }
         
@@ -864,6 +882,7 @@ export class MainScene extends Phaser.Scene {
       },
       callbackScope: this,
       onComplete: () => {
+        this.typewriterTimeEvent = null;
         this.typeNextLog();
       }
     });
@@ -1000,10 +1019,18 @@ export class MainScene extends Phaser.Scene {
     if (this.gameState === STATES.PLAYING || this.gameState === STATES.ANALYSIS) {
       this.drawRadarChart();
       this.drawFuseGauge();
+      if (this.endlessBadgeText) {
+        const showEndless = this.isEndlessMode;
+        this.endlessBadgeText.setVisible(showEndless);
+        if (showEndless) {
+          this.endlessBadgeText.setAlpha(0.5 + 0.5 * Math.sin(time / 200.0));
+        }
+      }
     } else {
       if (this.radarGraphics) this.radarGraphics.clear();
       if (this.gaugeGraphics) this.gaugeGraphics.clear();
       if (this.scanGraphics) this.scanGraphics.clear();
+      if (this.endlessBadgeText) this.endlessBadgeText.setVisible(false);
     }
 
     if (this.gameState === STATES.PLAYING) {
@@ -1113,7 +1140,14 @@ export class MainScene extends Phaser.Scene {
       // Draw dynamic EQ equalizer columns
       if (this.audioManager && this.eqGraphics) {
         this.eqGraphics.clear();
-        this.eqGraphics.fillStyle(0x00f0ff, 0.45);
+        
+        let eqColor = 0x00f0ff; // Phase 1 Teal
+        if (this.jammer && this.jammer.phase === 2) {
+          eqColor = 0xffaa00; // Phase 2 Orange
+        } else if (this.jammer && this.jammer.phase >= 3) {
+          eqColor = 0xff0055; // Phase 3 Red-Magenta
+        }
+        this.eqGraphics.fillStyle(eqColor, 0.45);
         const eqX = 530;
         const eqY = 510;
         const barWidth = 10;

@@ -274,6 +274,7 @@ export class Jammer {
     // 1. Draw horizontal scanning line with a vertical glow
     const lineXStart = 100;
     const lineXEnd = 700;
+    const trackWidth = 600;
 
     // Sweep line fill
     this.graphics.fillStyle(0xff1144, 0.15);

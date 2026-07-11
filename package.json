@@ -1,0 +1,19 @@
+{
+  "name": "wavelength",
+  "version": "0.1.0",
+  "description": "Wavelength — a single-screen reflex/precision arcade game with an adaptive AI Jammer. Parsewave Game Jam 2026.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^4.1.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  },
+  "private": true,
+  "license": "MIT"
+}

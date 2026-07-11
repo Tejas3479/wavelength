@@ -173,6 +173,7 @@ export class TerminalCLI {
         this.scene.logTerminal('  /decrypt      - start memory bypass crack minigame');
         this.scene.logTerminal('  /submit [key] - submit passcode vector match');
         this.scene.logTerminal('  /endless      - toggle post-game endless loop');
+        this.scene.logTerminal('  /agent        - toggle autonomous AI tuning agent');
         break;
         
       case '/diagnose':
@@ -240,6 +241,10 @@ export class TerminalCLI {
         this.scene.toggleEndlessMode();
         break;
 
+      case '/agent':
+        this.scene.toggleAgentAutopilot();
+        break;
+
       case '/scan':
         if (this.scene.gameState === 'PLAYING') {
           this.scene.initiateScan();
@@ -293,7 +298,8 @@ export class TerminalCLI {
       '/scan',
       '/decrypt',
       '/submit',
-      '/endless'
+      '/endless',
+      '/agent'
     ];
 
     const matches = commandsList.filter(c => c.startsWith(val));

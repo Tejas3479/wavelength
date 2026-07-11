@@ -132,6 +132,13 @@ export class MainScene extends Phaser.Scene {
 
     this.isEndlessMode = false;
 
+    // Autopilot AI Tuning Agent variables
+    this.isAgentAutopilotActive = false;
+    this.lastAgentLogTime = 0;
+    this.lastAgentLockTime = 0;
+    this.lastAgentDecryptSolveTime = null;
+    this.lastAgentUpgradeSolveTime = null;
+
     // Combo streak and multiplier values
     this.comboMultiplier = 1;
     this.consecutiveLocks = 0;
@@ -403,6 +410,11 @@ export class MainScene extends Phaser.Scene {
       this.savedBandSpeed = 1.5;
       this.isEndlessMode = false;
       this.upgradeCount = 0;
+      this.isAgentAutopilotActive = false;
+      this.lastAgentLogTime = 0;
+      this.lastAgentLockTime = 0;
+      this.lastAgentDecryptSolveTime = null;
+      this.lastAgentUpgradeSolveTime = null;
 
       this.comboMultiplier = 1;
       this.consecutiveLocks = 0;
@@ -809,6 +821,113 @@ export class MainScene extends Phaser.Scene {
     this.logTerminal(`[!] SYSTEM SETTING: Endless run loop = ${this.isEndlessMode ? 'ACTIVE' : 'INACTIVE'}`);
   }
 
+  toggleAgentAutopilot() {
+    this.isAgentAutopilotActive = !this.isAgentAutopilotActive;
+    this.logTerminal(`[!] SYSTEM SETTING: Agent Autopilot loop = ${this.isAgentAutopilotActive ? 'ACTIVE' : 'INACTIVE'}`);
+    if (this.isAgentAutopilotActive) {
+      this.logTerminal('[!] AGENT: Reading cognitive maps, active shields, and clock vectors.');
+    }
+  }
+
+  updatePlayerAgent(dt, time) {
+    if (this.gameState !== STATES.PLAYING && this.gameState !== STATES.UPGRADE) return;
+
+    // Auto-select upgrade in upgrade shop after a delay
+    if (this.gameState === STATES.UPGRADE && !this.lastAgentUpgradeSolveTime) {
+      this.lastAgentUpgradeSolveTime = time;
+      this.time.delayedCall(2000, () => {
+        if (this.gameState === STATES.UPGRADE) {
+          const randomIdx = Math.floor(Math.random() * 3);
+          this.logTerminal(`[AGENT] UPGRADE NODE ACCESSED. Auto-installing firmware card #${randomIdx + 1}.`);
+          this.upgradeSystem.handleSelect(randomIdx);
+        }
+      });
+      return;
+    }
+    if (this.gameState !== STATES.UPGRADE) {
+      this.lastAgentUpgradeSolveTime = null;
+    }
+
+    if (this.gameState !== STATES.PLAYING) return;
+
+    // Define agent decision variables
+    const currentVal = this.dialController.value;
+    const targetVal = this.signalBand.center;
+    const diff = targetVal - currentVal;
+    const absDiff = Math.abs(diff);
+    const bandWidth = this.signalBand.width;
+    const cleanZone = bandWidth * 0.22;
+    const standardZone = bandWidth * 0.50;
+
+    // 1. Perception & Logging throttle
+    if (!this.lastAgentLogTime) this.lastAgentLogTime = 0;
+    const logInterval = 2000; // log every 2 seconds
+    const shouldLog = (time - this.lastAgentLogTime) > logInterval;
+
+    // 2. Tactical reasoning: triggers EMP if hazard block is in our steering path
+    if (this.hasEMP && this.empCooldown <= 0 && !this.isEMPActive) {
+      const inHazard = this.signalBand.isNeedleInHazard(currentVal);
+      if (inHazard) {
+        this.logTerminal('[AGENT] WARNING: needle in high-static hazard block! Actuating EMP capacitor.');
+        this.triggerEMP();
+      }
+    }
+
+    // 3. Decryption Solver
+    if (this.isDecryptionActive && !this.lastAgentDecryptSolveTime) {
+      this.lastAgentDecryptSolveTime = time;
+      this.time.delayedCall(1500, () => {
+        if (this.isDecryptionActive && this.decryptionCorrectKey) {
+          this.logTerminal(`[AGENT] CRYPTO NODE DETECTED. Submitting decryption key: ${this.decryptionCorrectKey}`);
+          this.submitDecryption(this.decryptionCorrectKey);
+        }
+      });
+    }
+    if (!this.isDecryptionActive) {
+      this.lastAgentDecryptSolveTime = null;
+    }
+
+    // 4. Steering Actuator
+    // Simple proportional control with dampening based on distance
+    if (absDiff > cleanZone) {
+      if (diff > 0) {
+        this.dialController.velocity += this.dialController.acceleration * dt * 0.85;
+        if (shouldLog) {
+          this.logTerminal(`[AGENT] Target drift right (+${absDiff.toFixed(1)}). Steering RIGHT.`);
+          this.lastAgentLogTime = time;
+        }
+      } else {
+        this.dialController.velocity -= this.dialController.acceleration * dt * 0.85;
+        if (shouldLog) {
+          this.logTerminal(`[AGENT] Target drift left (-${absDiff.toFixed(1)}). Steering LEFT.`);
+          this.lastAgentLogTime = time;
+        }
+      }
+    } else {
+      this.dialController.velocity *= 0.65; // slow down needle to stabilize
+      if (shouldLog) {
+        this.logTerminal(`[AGENT] Signal locks maintained. Holding alignment.`);
+        this.lastAgentLogTime = time;
+      }
+    }
+
+    // 5. Locking frequency decision
+    const isWarpTimeCritical = this.scoreTimer.timeLeft < 1.6;
+    if (absDiff <= cleanZone) {
+      if (!this.lastAgentLockTime || (time - this.lastAgentLockTime > 800)) {
+        this.logTerminal('[AGENT] Optimal resonance established. Initiating lock command.');
+        this.attemptLock();
+        this.lastAgentLockTime = time;
+      }
+    } else if (isWarpTimeCritical && absDiff <= standardZone) {
+      if (!this.lastAgentLockTime || (time - this.lastAgentLockTime > 800)) {
+        this.logTerminal('[AGENT] Clock critical. Standard alignment lock triggered.');
+        this.attemptLock();
+        this.lastAgentLockTime = time;
+      }
+    }
+  }
+
   logTerminal(message) {
     if (!this.logQueue) {
       this.logQueue = [];
@@ -932,6 +1051,11 @@ export class MainScene extends Phaser.Scene {
 
   update(time, delta) {
     const dt = delta / 1000;
+
+    // Run autonomous player agent if enabled
+    if (this.isAgentAutopilotActive) {
+      this.updatePlayerAgent(dt, time);
+    }
 
     // 1. Animate Gutter Hex Matrix code rain
     const isPlayingOrAnalyzing = this.gameState === STATES.PLAYING || this.gameState === STATES.ANALYSIS;

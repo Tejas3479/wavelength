@@ -149,6 +149,99 @@
       display: block;
       image-rendering: auto;
     }
+
+    /* How to Play overlay — first-launch only */
+    #htp-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(6, 7, 9, 0.88);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      opacity: 1;
+      transition: opacity 0.4s ease-out;
+    }
+    #htp-overlay.htp-hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .htp-card {
+      width: 520px;
+      max-height: 480px;
+      background: linear-gradient(165deg, rgba(13,15,18,0.96), rgba(10,12,16,0.98));
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      border-radius: 6px;
+      padding: 32px 36px;
+      box-shadow: 0 0 40px rgba(0, 240, 255, 0.08), inset 0 1px 0 rgba(0, 240, 255, 0.1);
+      overflow-y: auto;
+    }
+    .htp-card h2 {
+      font-family: 'Orbitron', monospace;
+      font-size: 22px;
+      color: #00f0ff;
+      margin-bottom: 6px;
+      letter-spacing: 3px;
+      text-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
+    }
+    .htp-card .htp-subtitle {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: #536271;
+      margin-bottom: 22px;
+    }
+    .htp-card .htp-section {
+      margin-bottom: 16px;
+    }
+    .htp-card .htp-section-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 10px;
+      color: #ff007f;
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .htp-card .htp-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 4px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: #c8cdd3;
+      line-height: 1.6;
+    }
+    .htp-card .htp-key {
+      display: inline-block;
+      background: rgba(0, 240, 255, 0.1);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      border-radius: 3px;
+      padding: 1px 7px;
+      font-size: 11px;
+      color: #00f0ff;
+      white-space: nowrap;
+      min-width: 40px;
+      text-align: center;
+    }
+    .htp-card hr {
+      border: none;
+      border-top: 1px solid rgba(0, 240, 255, 0.08);
+      margin: 14px 0;
+    }
+    .htp-dismiss {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: #536271;
+      text-align: center;
+      margin-top: 18px;
+      animation: htp-pulse 2s ease-in-out infinite;
+    }
+    @keyframes htp-pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -202,7 +295,73 @@
     </div>
     <div class="crt-overlay"></div>
     <div class="scanlines"></div>
+
+    <!-- How to Play overlay (first launch only) -->
+    <div id="htp-overlay" class="htp-hidden">
+      <div class="htp-card">
+        <h2>HOW TO PLAY</h2>
+        <div class="htp-subtitle">WAVELENGTH — ADAPTIVE-AI SIGNAL TUNER TERMINAL</div>
+
+        <div class="htp-section">
+          <div class="htp-section-title">⬡ Objective</div>
+          <div class="htp-row">Lock the dial needle onto the hidden signal band before time runs out. The Jammer AI adapts to your habits each round.</div>
+        </div>
+
+        <div class="htp-section">
+          <div class="htp-section-title">⬡ Controls</div>
+          <div class="htp-row"><span class="htp-key">A / ←</span> Rotate needle left</div>
+          <div class="htp-row"><span class="htp-key">D / →</span> Rotate needle right</div>
+          <div class="htp-row"><span class="htp-key">SPACE</span> Lock frequency / Start game</div>
+          <div class="htp-row"><span class="htp-key">~ or /</span> Open the command terminal (CLI)</div>
+        </div>
+
+        <hr />
+
+        <div class="htp-section">
+          <div class="htp-section-title">⬡ Gameplay Loop</div>
+          <div class="htp-row">1. Steer the needle into the glowing target band.</div>
+          <div class="htp-row">2. Press SPACE to lock — accuracy determines your score.</div>
+          <div class="htp-row">3. Every 3 locks, choose an upgrade from the shop.</div>
+          <div class="htp-row">4. The Jammer AI studies your speed, bias, and timing — it fights back harder each round.</div>
+          <div class="htp-row">5. Reach 15 successful locks to win.</div>
+        </div>
+
+        <hr />
+
+        <div class="htp-section">
+          <div class="htp-section-title">⬡ Pro Tips</div>
+          <div class="htp-row">• Use CLI commands like <span class="htp-key">/scan</span> and <span class="htp-key">/emp</span> for tactical advantages.</div>
+          <div class="htp-row">• Chain clean locks for combo multipliers.</div>
+          <div class="htp-row">• Watch the Cognitive Map — it reveals the Jammer's next strategy.</div>
+        </div>
+
+        <div class="htp-dismiss">[ PRESS ANY KEY OR CLICK TO CONTINUE ]</div>
+      </div>
+    </div>
   </div>
+
+  <script>
+    (function() {
+      var HTP_KEY = 'wavelength_htp_seen';
+      var overlay = document.getElementById('htp-overlay');
+      if (!overlay) return;
+
+      // Show only on first visit
+      if (!localStorage.getItem(HTP_KEY)) {
+        overlay.classList.remove('htp-hidden');
+
+        function dismiss() {
+          overlay.classList.add('htp-hidden');
+          localStorage.setItem(HTP_KEY, '1');
+          document.removeEventListener('keydown', dismiss);
+          overlay.removeEventListener('click', dismiss);
+        }
+
+        document.addEventListener('keydown', dismiss);
+        overlay.addEventListener('click', dismiss);
+      }
+    })();
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

@@ -4,8 +4,8 @@ import Phaser from 'phaser';
  * SignalBand
  * 
  * Manages the moving target signal band.
- * Tracks position (0 to 100) and width. Accepts dynamic parameters
- * from the Jammer AI to adjust its baseline center bias, speed, and amplitude.
+ * Renders background grid overlay and a dynamic green sine wave track that flattens out
+ * inside the target band center, visually representing signal interference/tuning.
  */
 export class SignalBand {
   /**
@@ -31,6 +31,7 @@ export class SignalBand {
     this.direction = 1;
 
     this.movementTime = 0.0;
+    this.wavePhase = 0.0;        // Phase offset for animating the track wave
 
     // Limits to keep band fully on screen
     this.minCenter = this.width / 2 + 5;
@@ -63,12 +64,15 @@ export class SignalBand {
   }
 
   /**
-   * Update the band position over time based on Jammer parameters
+   * Update the band position and track wave phase over time
    * @param {number} delta time step in milliseconds
    */
   update(delta) {
     const dt = delta / 1000;
     this.movementTime += dt * this.speed * this.direction;
+
+    // Increment wave phase to animate track ripples (speed based on jammer's frequency)
+    this.wavePhase += dt * this.speed * 8.0;
 
     // Core movement calculation: oscillate around baselineCenter
     const oscVal = Math.sin(this.movementTime) * this.amplitude;
@@ -93,6 +97,51 @@ export class SignalBand {
   render() {
     this.graphics.clear();
 
+    // 1. Draw faint background coordinate grids
+    this.graphics.lineStyle(1, 0x00ffff, 0.04);
+    
+    // Vertical grid lines (every 40px)
+    for (let gx = 0; gx <= 800; gx += 40) {
+      this.graphics.lineBetween(gx, 0, gx, 600);
+    }
+    // Horizontal grid lines (every 40px)
+    for (let gy = 0; gy <= 600; gy += 40) {
+      this.graphics.lineBetween(0, gy, 800, gy);
+    }
+
+    // 2. Draw the animated green/teal interference wave along the track
+    this.graphics.lineStyle(3, 0x00ffaa, 0.65);
+    
+    let pathPoints = [];
+    const step = 4; // draw line segments every 4 pixels for efficiency
+    
+    for (let px = this.trackStart; px <= this.trackStart + this.trackWidth; px += step) {
+      const pct = ((px - this.trackStart) / this.trackWidth) * 100;
+      
+      // Calculate distance from this point to the target band center
+      const dist = Math.abs(pct - this.center);
+      
+      // Dampening factor: Gaussian curve that goes to 0 near center
+      // If close to band center, wave goes flat (signal is clear)
+      const dampening = Math.min(1.0, Math.pow(dist / 14.0, 2.0));
+      
+      // Standard wave oscillation, scale down inside the band
+      const yOffset = Math.sin(px * 0.05 - this.wavePhase) * 16.0 * dampening;
+      
+      pathPoints.push({ x: px, y: this.y + yOffset });
+    }
+
+    // Draw the continuous path
+    if (pathPoints.length > 0) {
+      this.graphics.beginPath();
+      this.graphics.moveTo(pathPoints[0].x, pathPoints[0].y);
+      for (let i = 1; i < pathPoints.length; i++) {
+        this.graphics.lineTo(pathPoints[i].x, pathPoints[i].y);
+      }
+      this.graphics.strokePath();
+    }
+
+    // 3. Draw the target band boundary overlay
     const halfWidthPct = this.width / 2;
     const bandStartPct = this.center - halfWidthPct;
     
@@ -100,17 +149,17 @@ export class SignalBand {
     const bandX = this.trackStart + (bandStartPct / 100) * this.trackWidth;
     const bandWidthPx = (this.width / 100) * this.trackWidth;
 
-    // Draw the target band as a semi-transparent teal/green rectangle
-    this.graphics.fillStyle(0x00ffaa, 0.25);
-    this.graphics.lineStyle(2, 0x00ffaa, 0.8);
+    // Draw the target band as a semi-transparent cyan/green target zone
+    this.graphics.fillStyle(0x00ffaa, 0.12);
+    this.graphics.lineStyle(2, 0x00ffaa, 0.7);
     
-    // Fill band region (box height centered on track y)
-    this.graphics.fillRect(bandX, this.y - 20, bandWidthPx, 40);
-    this.graphics.strokeRect(bandX, this.y - 20, bandWidthPx, 40);
+    this.graphics.fillRect(bandX, this.y - 25, bandWidthPx, 50);
+    this.graphics.strokeRect(bandX, this.y - 25, bandWidthPx, 50);
   }
 
   destroy() {
     this.graphics.destroy();
   }
 }
+
 

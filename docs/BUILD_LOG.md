@@ -71,8 +71,30 @@ The Jammer AI adaptive opponent is Wavelength's key design differentiator. Build
 **Validation:**
 
 - `npm run build` succeeds without issues.
-- Playtested with heavy right-drift bias: Jammer successfully detected `DRIFT RIGHT (+15.2)` and shifted baseline center to the left (tuning value ~32) for the next round.
-- Playtested with rapid dial oscillations: Jammer successfully detected `SPEED HIGH` and increased band frequency (speed factor ~3.1), resulting in highly energetic target movement.
 - Verified that the 1.5-second scan freeze functions correctly, visual scan sweep paints properly, and text readouts flash during calibration.
+
+---
+
+## Session 4 — Polish and Feel (2026-07-11)
+
+**What was set up:**
+
+- AudioManager (`src/modules/AudioManager.js`): Dynamic sound generator using Web Audio API nodes. Playback of static crackle and detuned hum oscillators, mixing gain channels dynamically based on dial accuracy to guide the player. Triggers warm triangle beeps on lock success and aggressive sawtooth sliding buzzes on misses/timeouts.
+- Implemented user interaction lock release in MainScene: Resumes/starts `AudioContext` immediately on the player's first Space or Click interaction on the Title screen.
+- Screen Shake & Camera Flash feedback: Triggers camera shake (`shake(150, 0.012)`) and red camera flash on misses/timeouts; flashes camera teal/green on successful signal lock.
+- Visual track redesign: Replaced the flat lines in SignalBand (`src/modules/SignalBand.js`) with an animated green sine wave track that flattens out into a clear line inside the target band. Added a retro CRT grid overlay in the background.
+- UI Overlays Polish: Reformatted text sizes, alignments, and labels for Title, Game Over, and Victory screens.
+
+**Why this order:**
+
+Adding tactile visual/audio feedback directly links user action to gameplay response. Using Web Audio synthesizer elements guarantees absolute cross-platform sound loading reliability, bypassing CORS/header failures on the jam target hosts.
+
+**Validation:**
+
+- `npm run build` succeeds cleanly.
+- Playtested on multiple screen resolutions: scale system auto-centers and fits perfectly.
+- Confirmed audio activates on click/space and correctly crossfades between terminal static and carrier tone during tuning.
+- Verified screen shake adds tactile "malfunction" weight on incorrect lock triggers.
+
 
 

@@ -3,6 +3,7 @@ import { DialController } from '../modules/DialController.js';
 import { SignalBand } from '../modules/SignalBand.js';
 import { ScoreTimer } from '../modules/ScoreTimer.js';
 import { Jammer } from '../modules/Jammer.js';
+import { AudioManager } from '../modules/AudioManager.js';
 
 const STATES = {
   TITLE: 'TITLE',
@@ -16,6 +17,7 @@ const STATES = {
  * MainScene — the primary gameplay scene.
  * 
  * Coordinates gameplay states, tracks real-time player telemetry,
+ * triggers audio/visual polish (shakes, flashes, synth tones),
  * and delegates to the Jammer AI to adjust game difficulty dynamically.
  */
 export class MainScene extends Phaser.Scene {
@@ -25,6 +27,9 @@ export class MainScene extends Phaser.Scene {
 
   create() {
     this.gameState = STATES.TITLE;
+
+    // Initialize synthesized audio manager
+    this.audioManager = new AudioManager();
 
     // 1. Initialize core game modules (placed centrally)
     // Track at y = 250, dial knob sits below at y = 400
@@ -62,21 +67,21 @@ export class MainScene extends Phaser.Scene {
   setupScreenOverlays() {
     // Title Overlay
     this.titleContainer = this.add.container(400, 300);
-    const titleText = this.add.text(0, -100, 'WAVELENGTH', {
+    const titleText = this.add.text(0, -110, 'WAVELENGTH', {
       fontFamily: 'monospace',
-      fontSize: '48px',
+      fontSize: '52px',
       color: '#00ffaa',
       stroke: '#000000',
       strokeThickness: 8
     }).setOrigin(0.5);
     
-    const subTitleText = this.add.text(0, -30, '— adaptive-AI signal tuner —', {
+    const subTitleText = this.add.text(0, -40, '— adaptive-AI signal tuner terminal —', {
       fontFamily: 'monospace',
       fontSize: '18px',
       color: '#8888aa'
     }).setOrigin(0.5);
 
-    const instructText = this.add.text(0, 50, 'CONTROLS:\n← / → or A / D to rotate dial\nOr click & drag dial knob directly\n\nPRESS SPACE or CLICK HERE TO START', {
+    const instructText = this.add.text(0, 50, 'CONTROLS:\n← / → or A / D to rotate dial\nOr click & drag dial knob directly\n\nPRESS SPACE or CLICK HERE TO START\n(Enables Terminal Synthesizer Audio)', {
       fontFamily: 'monospace',
       fontSize: '16px',
       color: '#ffffff',
@@ -90,13 +95,13 @@ export class MainScene extends Phaser.Scene {
     this.gameOverContainer = this.add.container(400, 300);
     const goTitle = this.add.text(0, -50, 'SIGNAL LOST', {
       fontFamily: 'monospace',
-      fontSize: '48px',
+      fontSize: '52px',
       color: '#ff3366',
       stroke: '#000000',
       strokeThickness: 8
     }).setOrigin(0.5);
 
-    const goInstruct = this.add.text(0, 50, 'The Jammer has completely blocked you.\n\nPRESS SPACE TO TRY AGAIN', {
+    const goInstruct = this.add.text(0, 50, 'The Jammer has completely blocked you.\n\nPRESS SPACE TO REBOOT TERMINAL', {
       fontFamily: 'monospace',
       fontSize: '18px',
       color: '#ffffff',
@@ -109,13 +114,13 @@ export class MainScene extends Phaser.Scene {
     this.victoryContainer = this.add.container(400, 300);
     const vicTitle = this.add.text(0, -50, 'SIGNAL RESTORED', {
       fontFamily: 'monospace',
-      fontSize: '48px',
+      fontSize: '52px',
       color: '#00ffaa',
       stroke: '#000000',
       strokeThickness: 8
     }).setOrigin(0.5);
 
-    const vicInstruct = this.add.text(0, 50, 'You successfully tuned past the interference!\n\nPRESS SPACE TO SURVIVE AGAIN', {
+    const vicInstruct = this.add.text(0, 50, 'You successfully bypassed the Jammer!\n\nPRESS SPACE TO survive AGAIN', {
       fontFamily: 'monospace',
       fontSize: '18px',
       color: '#ffffff',
@@ -153,6 +158,8 @@ export class MainScene extends Phaser.Scene {
       if (this.gameState === STATES.PLAYING) {
         this.attemptLock();
       } else if (this.gameState !== STATES.ANALYSIS) {
+        // Initialize AudioContext on user interaction
+        this.audioManager.start();
         this.transitionToState(STATES.PLAYING);
       }
     });
@@ -160,6 +167,8 @@ export class MainScene extends Phaser.Scene {
     // Pointer down on non-playing screens to start
     this.input.on('pointerdown', () => {
       if (this.gameState !== STATES.PLAYING && this.gameState !== STATES.ANALYSIS) {
+        // Initialize AudioContext on user interaction
+        this.audioManager.start();
         this.transitionToState(STATES.PLAYING);
       }
     });
@@ -185,6 +194,9 @@ export class MainScene extends Phaser.Scene {
 
     if (newState === STATES.TITLE) {
       this.jammer.history = []; // Clear history on reset to title
+      if (this.audioManager) {
+        this.audioManager.stopTuning();
+      }
     }
 
     if (isPlaying) {
@@ -193,10 +205,16 @@ export class MainScene extends Phaser.Scene {
     } else if (isAnalysis) {
       this.scoreTimer.stopTimer();
       this.feedbackText.setVisible(false);
+      if (this.audioManager) {
+        this.audioManager.stopTuning();
+      }
       this.runJammerAnalysis();
     } else {
       this.scoreTimer.stopTimer();
       this.feedbackText.setVisible(false);
+      if (this.audioManager) {
+        this.audioManager.stopTuning();
+      }
     }
   }
 
@@ -258,6 +276,7 @@ export class MainScene extends Phaser.Scene {
     this.scoreTimer.incrementScore();
     this.cameras.main.flash(200, 0, 255, 170); // Flash Teal/Green
     this.showFeedback('LOCKED!', '#00ffaa');
+    this.audioManager.playLock();
 
     if (this.scoreTimer.score >= 10) {
       this.transitionToState(STATES.VICTORY);
@@ -269,7 +288,9 @@ export class MainScene extends Phaser.Scene {
   handleLockMiss() {
     const isAlive = this.scoreTimer.decrementLife();
     this.cameras.main.flash(200, 255, 51, 102); // Flash Red
+    this.cameras.main.shake(150, 0.012);        // Juice Screen Shake
     this.showFeedback('MISS! -1 LIFE', '#ff3366');
+    this.audioManager.playMiss();
 
     if (!isAlive) {
       this.transitionToState(STATES.GAMEOVER);
@@ -281,7 +302,9 @@ export class MainScene extends Phaser.Scene {
   handleTimeout() {
     const isAlive = this.scoreTimer.decrementLife();
     this.cameras.main.flash(250, 255, 51, 102); // Flash Red longer for timeout
+    this.cameras.main.shake(200, 0.015);        // Stronger Screen Shake
     this.showFeedback('TIMEOUT! -1 LIFE', '#ff3366');
+    this.audioManager.playMiss();
 
     if (!isAlive) {
       this.transitionToState(STATES.GAMEOVER);
@@ -334,11 +357,21 @@ export class MainScene extends Phaser.Scene {
       this.dialController.update(delta);
       this.signalBand.update(delta);
       this.scoreTimer.update(delta, () => this.handleTimeout());
+
+      // Update real-time detuning audio mix
+      if (this.audioManager) {
+        this.audioManager.updateTuning(
+          currentDial, 
+          this.signalBand.center, 
+          this.signalBand.contains(currentDial)
+        );
+      }
     } 
     else if (this.gameState === STATES.ANALYSIS) {
       this.jammer.update(delta);
     }
   }
 }
+
 
 

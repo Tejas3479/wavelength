@@ -4,8 +4,8 @@ import Phaser from 'phaser';
  * SignalBand
  * 
  * Manages the moving target signal band.
- * Tracks position (0 to 100) and width, handles simple movement patterns
- * for the core loop, and performs containment checks for lock attempts.
+ * Tracks position (0 to 100) and width. Accepts dynamic parameters
+ * from the Jammer AI to adjust its baseline center bias, speed, and amplitude.
  */
 export class SignalBand {
   /**
@@ -21,12 +21,18 @@ export class SignalBand {
     this.trackWidth = trackWidth;
 
     // Target band configuration
-    this.center = 50.0;     // Center position of band (0 to 100)
-    this.width = 12.0;      // Total width of the band (in 0-100 units)
-    this.speed = 1.5;       // Movement speed multiplier
+    this.center = 50.0;          // Current center position of band (0 to 100)
+    this.width = 12.0;           // Total width of the band (in 0-100 units)
+    
+    // Dynamic parameters updated by Jammer AI
+    this.baselineCenter = 50.0;  // Center bias around which it oscillates
+    this.speed = 1.5;            // Frequency of oscillation
+    this.amplitude = 20.0;       // Scale of swing oscillation
+    this.direction = 1;
+
     this.movementTime = 0.0;
 
-    // Movement limits to keep band fully on track
+    // Limits to keep band fully on screen
     this.minCenter = this.width / 2 + 5;
     this.maxCenter = 100 - (this.width / 2 + 5);
 
@@ -38,30 +44,38 @@ export class SignalBand {
   }
 
   /**
-   * Resets and randomizes the band properties for a new round
+   * Resets the band movement phase. Base values will be overwritten by Jammer parameters.
    */
   reset() {
-    this.movementTime = Math.random() * 100; // Random offset for starting position
-    // Random speed between 1.0 and 2.5
-    this.speed = 1.0 + Math.random() * 1.5;
-    // Alternate direction/patterns
+    this.movementTime = Math.random() * 100; // Random starting phase
     this.direction = Math.random() > 0.5 ? 1 : -1;
-    // Set random starting position within limits
-    this.center = this.minCenter + Math.random() * (this.maxCenter - this.minCenter);
   }
 
   /**
-   * Update the band position over time
+   * Apply dynamic parameters calculated by Jammer AI
+   * @param {object} params Jammer-calculated parameters
+   */
+  applyJammerParams(params) {
+    this.baselineCenter = params.baselineCenter;
+    this.speed = params.speed;
+    this.amplitude = params.amplitude;
+    this.reset(); // Reset starting phase
+  }
+
+  /**
+   * Update the band position over time based on Jammer parameters
    * @param {number} delta time step in milliseconds
    */
   update(delta) {
     const dt = delta / 1000;
     this.movementTime += dt * this.speed * this.direction;
 
-    // Calculate new center using a clean sine wave oscillation
-    // Map -1..1 of sine wave to minCenter..maxCenter
-    const sinVal = Math.sin(this.movementTime);
-    this.center = this.minCenter + ((sinVal + 1) / 2) * (this.maxCenter - this.minCenter);
+    // Core movement calculation: oscillate around baselineCenter
+    const oscVal = Math.sin(this.movementTime) * this.amplitude;
+    this.center = this.baselineCenter + oscVal;
+
+    // Clamp center position to keep the band within bounds
+    this.center = Phaser.Math.Clamp(this.center, this.minCenter, this.maxCenter);
 
     this.render();
   }
@@ -99,3 +113,4 @@ export class SignalBand {
     this.graphics.destroy();
   }
 }
+

@@ -51,6 +51,28 @@ Getting the ugly core gameplay loop working before adding any advanced logic or 
 - `npm run build` succeeds without issues.
 - Confirmed that index.html boots, correctly renders the title overlay, and transitions to gameplay.
 - Confirmed that keyboard and mouse dragging both adjust the dial needle.
-- Confirmed that hitting Space within the band increments the score and flashes teal/green.
 - Confirmed that missing or timeout flashes red, subtracts a life, and triggers game-over at 0 lives.
+
+---
+
+## Session 3 — Adaptive Jammer Layer (2026-07-11)
+
+**What was set up:**
+
+- Jammer module (`src/modules/Jammer.js`): Tracks player tuning telemetry (bias error and correction velocity) in a rolling 3-attempt buffer. Implements the countering equations for the next signal band (center shift, oscillation frequency, oscillation amplitude).
+- Renders the visual "reading you..." tell: pauses the gameplay loop for 1.5 seconds between rounds, plays a red laser sweep animation down the screen, and displays flashing status text with the parsed user telemetry metrics.
+- Modified SignalBand (`src/modules/SignalBand.js`): Replaced random/fixed movement values with configurable properties (`baselineCenter`, `speed`, `amplitude`) dynamically set by the Jammer module via `applyJammerParams()`.
+- Wired telemetry collection in MainScene (`src/scenes/MainScene.js`): Records player dial positions and target band positions on every update frame. Computes average drift and adjustment speed at the end of each round. Transitions from `PLAYING` to `ANALYSIS` state, triggering the Jammer scanning sequence before resetting the dial and starting the next round.
+
+**Why this order:**
+
+The Jammer AI adaptive opponent is Wavelength's key design differentiator. Building it next ensures that the gameplay is functional, fun, and legible, allowing us to tuning parameters and verify the adaptive rules before spending time on audio and final visual assets in Session 4.
+
+**Validation:**
+
+- `npm run build` succeeds without issues.
+- Playtested with heavy right-drift bias: Jammer successfully detected `DRIFT RIGHT (+15.2)` and shifted baseline center to the left (tuning value ~32) for the next round.
+- Playtested with rapid dial oscillations: Jammer successfully detected `SPEED HIGH` and increased band frequency (speed factor ~3.1), resulting in highly energetic target movement.
+- Verified that the 1.5-second scan freeze functions correctly, visual scan sweep paints properly, and text readouts flash during calibration.
+
 

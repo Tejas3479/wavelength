@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import { DialController } from '../modules/DialController.js';
 import { SignalBand } from '../modules/SignalBand.js';
 import { ScoreTimer } from '../modules/ScoreTimer.js';
+import { Jammer } from '../modules/Jammer.js';
 
 const STATES = {
   TITLE: 'TITLE',
   PLAYING: 'PLAYING',
+  ANALYSIS: 'ANALYSIS',
   GAMEOVER: 'GAMEOVER',
   VICTORY: 'VICTORY'
 };
@@ -13,8 +15,8 @@ const STATES = {
 /**
  * MainScene — the primary gameplay scene.
  * 
- * Handles game states, coordinates input and gameplay modules,
- * and manages lock/miss transitions with visual screen flashes.
+ * Coordinates gameplay states, tracks real-time player telemetry,
+ * and delegates to the Jammer AI to adjust game difficulty dynamically.
  */
 export class MainScene extends Phaser.Scene {
   constructor() {
@@ -29,6 +31,14 @@ export class MainScene extends Phaser.Scene {
     this.dialController = new DialController(this, 400, 250, 600);
     this.signalBand = new SignalBand(this, 400, 250, 600);
     this.scoreTimer = new ScoreTimer(this);
+    this.jammer = new Jammer(this, 250);
+
+    // Telemetry variables
+    this.roundDialValues = [];
+    this.roundBandCenters = [];
+    this.totalDialMovement = 0.0;
+    this.roundTimeElapsed = 0.0;
+    this.lastDialValue = 50.0;
 
     // 2. Setup HUD Feedback
     this.feedbackText = this.add.text(400, 180, '', {
@@ -60,7 +70,7 @@ export class MainScene extends Phaser.Scene {
       strokeThickness: 8
     }).setOrigin(0.5);
     
-    const subTitleText = this.add.text(0, -30, '— signal tuning reflex arcade —', {
+    const subTitleText = this.add.text(0, -30, '— adaptive-AI signal tuner —', {
       fontFamily: 'monospace',
       fontSize: '18px',
       color: '#8888aa'
@@ -142,14 +152,14 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-SPACE', () => {
       if (this.gameState === STATES.PLAYING) {
         this.attemptLock();
-      } else {
+      } else if (this.gameState !== STATES.ANALYSIS) {
         this.transitionToState(STATES.PLAYING);
       }
     });
 
     // Pointer down on non-playing screens to start
     this.input.on('pointerdown', () => {
-      if (this.gameState !== STATES.PLAYING) {
+      if (this.gameState !== STATES.PLAYING && this.gameState !== STATES.ANALYSIS) {
         this.transitionToState(STATES.PLAYING);
       }
     });
@@ -165,24 +175,73 @@ export class MainScene extends Phaser.Scene {
 
     // Toggle gameplay modules HUD
     const isPlaying = newState === STATES.PLAYING;
-    this.dialController.graphics.setVisible(isPlaying);
-    this.signalBand.graphics.setVisible(isPlaying);
-    this.scoreTimer.setVisible(isPlaying);
+    const isAnalysis = newState === STATES.ANALYSIS;
+
+    this.dialController.graphics.setVisible(isPlaying || isAnalysis);
+    this.signalBand.graphics.setVisible(isPlaying || isAnalysis);
+    this.scoreTimer.setVisible(isPlaying || isAnalysis);
     this.lockButton.setVisible(isPlaying);
+    this.jammer.setVisible(isAnalysis);
+
+    if (newState === STATES.TITLE) {
+      this.jammer.history = []; // Clear history on reset to title
+    }
 
     if (isPlaying) {
       this.scoreTimer.resetGame();
-      this.startNewRound();
+      this.startNewRound(false);
+    } else if (isAnalysis) {
+      this.scoreTimer.stopTimer();
+      this.feedbackText.setVisible(false);
+      this.runJammerAnalysis();
     } else {
       this.scoreTimer.stopTimer();
       this.feedbackText.setVisible(false);
     }
   }
 
-  startNewRound() {
+  startNewRound(keepCurrentBand = false) {
     this.dialController.value = 50.0; // Reset needle to center
-    this.signalBand.reset();          // Randomize band speed/starting point
     this.scoreTimer.startRound();     // Reset countdown timer
+    
+    if (!keepCurrentBand) {
+      this.signalBand.reset();        // Randomize base parameters
+    }
+
+    // Reset telemetry trackers for this round
+    this.roundDialValues = [];
+    this.roundBandCenters = [];
+    this.totalDialMovement = 0.0;
+    this.roundTimeElapsed = 0.0;
+    this.lastDialValue = 50.0;
+  }
+
+  runJammerAnalysis() {
+    // 1. Calculate metrics for the round that just ended
+    let avgBias = 0.0;
+    if (this.roundDialValues.length > 0) {
+      let sumBias = 0.0;
+      for (let i = 0; i < this.roundDialValues.length; i++) {
+        sumBias += (this.roundDialValues[i] - this.roundBandCenters[i]);
+      }
+      avgBias = sumBias / this.roundDialValues.length;
+    }
+
+    const avgSpeed = this.roundTimeElapsed > 0 ? this.totalDialMovement / this.roundTimeElapsed : 0;
+
+    // 2. Feed metrics to the Jammer AI
+    this.jammer.recordAttempt(avgBias, avgSpeed);
+
+    // 3. Trigger analysis scanning sweep ("reading you..." tell)
+    this.jammer.startAnalysis((newParams) => {
+      // Callback triggered when 1.5s scan complete
+      this.signalBand.applyJammerParams(newParams);
+      // Resume gameplay
+      this.gameState = STATES.PLAYING;
+      this.lockButton.setVisible(true);
+      this.jammer.setVisible(false);
+      this.startNewRound(true);
+    });
   }
 
   attemptLock() {
@@ -203,7 +262,7 @@ export class MainScene extends Phaser.Scene {
     if (this.scoreTimer.score >= 10) {
       this.transitionToState(STATES.VICTORY);
     } else {
-      this.startNewRound();
+      this.transitionToState(STATES.ANALYSIS);
     }
   }
 
@@ -215,7 +274,7 @@ export class MainScene extends Phaser.Scene {
     if (!isAlive) {
       this.transitionToState(STATES.GAMEOVER);
     } else {
-      this.startNewRound();
+      this.transitionToState(STATES.ANALYSIS);
     }
   }
 
@@ -227,7 +286,7 @@ export class MainScene extends Phaser.Scene {
     if (!isAlive) {
       this.transitionToState(STATES.GAMEOVER);
     } else {
-      this.startNewRound();
+      this.transitionToState(STATES.ANALYSIS);
     }
   }
 
@@ -258,13 +317,28 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    if (this.gameState !== STATES.PLAYING) return;
+    if (this.gameState === STATES.PLAYING) {
+      const dt = delta / 1000;
+      this.roundTimeElapsed += dt;
 
-    this.dialController.update(delta);
-    this.signalBand.update(delta);
-    
-    // Pass callback for timeouts
-    this.scoreTimer.update(delta, () => this.handleTimeout());
+      // Track dial differences for speed metric
+      const currentDial = this.dialController.value;
+      const dialDiff = Math.abs(currentDial - this.lastDialValue);
+      this.totalDialMovement += dialDiff;
+      this.lastDialValue = currentDial;
+
+      // Sample data
+      this.roundDialValues.push(currentDial);
+      this.roundBandCenters.push(this.signalBand.center);
+
+      this.dialController.update(delta);
+      this.signalBand.update(delta);
+      this.scoreTimer.update(delta, () => this.handleTimeout());
+    } 
+    else if (this.gameState === STATES.ANALYSIS) {
+      this.jammer.update(delta);
+    }
   }
 }
+
 

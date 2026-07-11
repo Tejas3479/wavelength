@@ -4,6 +4,8 @@ import { SignalBand } from '../modules/SignalBand.js';
 import { ScoreTimer } from '../modules/ScoreTimer.js';
 import { Jammer } from '../modules/Jammer.js';
 import { AudioManager } from '../modules/AudioManager.js';
+import { JammerPresence } from '../modules/JammerPresence.js';
+import { RunSummary } from '../modules/RunSummary.js';
 
 const STATES = {
   TITLE: 'TITLE',
@@ -37,18 +39,29 @@ export class MainScene extends Phaser.Scene {
     this.signalBand = new SignalBand(this, 400, 250, 600);
     this.scoreTimer = new ScoreTimer(this);
     this.jammer = new Jammer(this, 250);
+    
+    // Glowing vector AI Jammer Eye
+    this.jammerPresence = new JammerPresence(this, 400, 110);
 
-    // Telemetry variables
+    // Telemetry variables for the current round
     this.roundDialValues = [];
     this.roundBandCenters = [];
     this.totalDialMovement = 0.0;
     this.roundTimeElapsed = 0.0;
     this.lastDialValue = 50.0;
 
+    // Granular run stats across attempts
+    this.runCleanLocks = 0;
+    this.runStandardLocks = 0;
+    this.runNearMisses = 0;
+    this.runTotalMisses = 0;
+    this.runTimeouts = 0;
+    this.speedSamples = [];
+
     // 2. Setup HUD Feedback
     this.feedbackText = this.add.text(400, 180, '', {
       fontFamily: 'monospace',
-      fontSize: '32px',
+      fontSize: '28px',
       align: 'center',
       stroke: '#000000',
       strokeThickness: 6
@@ -93,7 +106,7 @@ export class MainScene extends Phaser.Scene {
 
     // Game Over Overlay
     this.gameOverContainer = this.add.container(400, 300);
-    const goTitle = this.add.text(0, -50, 'SIGNAL LOST', {
+    const goTitle = this.add.text(0, -90, 'SIGNAL LOST', {
       fontFamily: 'monospace',
       fontSize: '52px',
       color: '#ff3366',
@@ -101,18 +114,19 @@ export class MainScene extends Phaser.Scene {
       strokeThickness: 8
     }).setOrigin(0.5);
 
-    const goInstruct = this.add.text(0, 50, 'The Jammer has completely blocked you.\n\nPRESS SPACE TO REBOOT TERMINAL', {
+    this.goInstruct = this.add.text(0, 40, 'The Jammer has completely blocked you.\n\nPRESS SPACE TO REBOOT TERMINAL', {
       fontFamily: 'monospace',
-      fontSize: '18px',
+      fontSize: '16px',
       color: '#ffffff',
-      align: 'center'
+      align: 'center',
+      lineSpacing: 6
     }).setOrigin(0.5);
 
-    this.gameOverContainer.add([goTitle, goInstruct]);
+    this.gameOverContainer.add([goTitle, this.goInstruct]);
 
     // Victory Overlay
     this.victoryContainer = this.add.container(400, 300);
-    const vicTitle = this.add.text(0, -50, 'SIGNAL RESTORED', {
+    const vicTitle = this.add.text(0, -90, 'SIGNAL RESTORED', {
       fontFamily: 'monospace',
       fontSize: '52px',
       color: '#00ffaa',
@@ -120,14 +134,15 @@ export class MainScene extends Phaser.Scene {
       strokeThickness: 8
     }).setOrigin(0.5);
 
-    const vicInstruct = this.add.text(0, 50, 'You successfully bypassed the Jammer!\n\nPRESS SPACE TO survive AGAIN', {
+    this.vicInstruct = this.add.text(0, 40, 'You successfully bypassed the Jammer!\n\nPRESS SPACE TO SURVIVE AGAIN', {
       fontFamily: 'monospace',
-      fontSize: '18px',
+      fontSize: '16px',
       color: '#ffffff',
-      align: 'center'
+      align: 'center',
+      lineSpacing: 6
     }).setOrigin(0.5);
 
-    this.victoryContainer.add([vicTitle, vicInstruct]);
+    this.victoryContainer.add([vicTitle, this.vicInstruct]);
 
     // Interactive LOCK button for playing screen
     this.lockButton = this.add.text(400, 550, 'LOCK SIGNAL [SPACE]', {
@@ -191,6 +206,9 @@ export class MainScene extends Phaser.Scene {
     this.scoreTimer.setVisible(isPlaying || isAnalysis);
     this.lockButton.setVisible(isPlaying);
     this.jammer.setVisible(isAnalysis);
+    
+    // Jammer Eye is visible on all screens as an AI presence
+    this.jammerPresence.setVisible(true);
 
     if (newState === STATES.TITLE) {
       this.jammer.history = []; // Clear history on reset to title
@@ -201,6 +219,15 @@ export class MainScene extends Phaser.Scene {
 
     if (isPlaying) {
       this.scoreTimer.resetGame();
+      
+      // Reset run statistics
+      this.runCleanLocks = 0;
+      this.runStandardLocks = 0;
+      this.runNearMisses = 0;
+      this.runTotalMisses = 0;
+      this.runTimeouts = 0;
+      this.speedSamples = [];
+
       this.startNewRound(false);
     } else if (isAnalysis) {
       this.scoreTimer.stopTimer();
@@ -214,6 +241,35 @@ export class MainScene extends Phaser.Scene {
       this.feedbackText.setVisible(false);
       if (this.audioManager) {
         this.audioManager.stopTuning();
+      }
+
+      // Generate Run Summary when game completes (GameOver or Victory)
+      if (newState === STATES.GAMEOVER || newState === STATES.VICTORY) {
+        let avgSpeedOfRun = 0.0;
+        if (this.speedSamples.length > 0) {
+          let sum = 0;
+          this.speedSamples.forEach(v => sum += v);
+          avgSpeedOfRun = sum / this.speedSamples.length;
+        }
+
+        const stats = {
+          score: this.scoreTimer.score,
+          cleanLocks: this.runCleanLocks,
+          standardLocks: this.runStandardLocks,
+          nearMisses: this.runNearMisses,
+          totalMisses: this.runTotalMisses,
+          timeouts: this.runTimeouts,
+          avgSpeed: avgSpeedOfRun,
+          victory: newState === STATES.VICTORY
+        };
+
+        const summary = RunSummary.generate(stats);
+
+        if (newState === STATES.GAMEOVER) {
+          this.goInstruct.setText(`The Jammer has completely blocked you.\n\n${summary}\n\nPRESS SPACE TO REBOOT TERMINAL`);
+        } else {
+          this.vicInstruct.setText(`You successfully bypassed the Jammer!\n\n${summary}\n\nPRESS SPACE TO SURVIVE AGAIN`);
+        }
       }
     }
   }
@@ -246,12 +302,15 @@ export class MainScene extends Phaser.Scene {
     }
 
     const avgSpeed = this.roundTimeElapsed > 0 ? this.totalDialMovement / this.roundTimeElapsed : 0;
+    
+    // Save round speed to running list
+    this.speedSamples.push(avgSpeed);
 
     // 2. Feed metrics to the Jammer AI
     this.jammer.recordAttempt(avgBias, avgSpeed);
 
     // 3. Trigger analysis scanning sweep ("reading you..." tell)
-    this.jammer.startAnalysis((newParams) => {
+    this.jammer.startAnalysis(this.scoreTimer.score, (newParams) => {
       // Callback triggered when 1.5s scan complete
       this.signalBand.applyJammerParams(newParams);
       // Resume gameplay
@@ -263,20 +322,35 @@ export class MainScene extends Phaser.Scene {
   }
 
   attemptLock() {
-    const isLocked = this.signalBand.contains(this.dialController.value);
+    const diff = Math.abs(this.dialController.value - this.signalBand.center);
+    const bandWidth = this.signalBand.width;
 
-    if (isLocked) {
-      this.handleLockSuccess();
+    // Three-tier lock zones
+    const cleanZone = bandWidth * 0.22;    // Inner ~22% center of the band (2.6 units)
+    const standardZone = bandWidth * 0.50; // Total band containment (6 units from center)
+    const nearMissZone = standardZone + 4.5; // Glitch boundary (+4.5 units outside)
+
+    if (diff <= cleanZone) {
+      this.handleCleanLockSuccess();
+    } else if (diff <= standardZone) {
+      this.handleStandardLockSuccess();
+    } else if (diff <= nearMissZone) {
+      this.handleNearMissGrace();
     } else {
       this.handleLockMiss();
     }
   }
 
-  handleLockSuccess() {
-    this.scoreTimer.incrementScore();
-    this.cameras.main.flash(200, 0, 255, 170); // Flash Teal/Green
-    this.showFeedback('LOCKED!', '#00ffaa');
-    this.audioManager.playLock();
+  handleCleanLockSuccess() {
+    // Clean lock awards double score
+    this.scoreTimer.score += 2;
+    this.scoreTimer.updateHUD();
+
+    this.cameras.main.flash(200, 0, 255, 120); // Bright Green
+    this.showFeedback('CLEAN LOCK! +2', '#00ffaa');
+    this.audioManager.playCleanLock();
+
+    this.runCleanLocks++;
 
     if (this.scoreTimer.score >= 10) {
       this.transitionToState(STATES.VICTORY);
@@ -285,12 +359,42 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  handleStandardLockSuccess() {
+    this.scoreTimer.incrementScore();
+    this.cameras.main.flash(200, 0, 220, 180); // Faint Green
+    this.showFeedback('SIGNAL LOCKED! +1', '#00eeaa');
+    this.audioManager.playLock();
+
+    this.runStandardLocks++;
+
+    if (this.scoreTimer.score >= 10) {
+      this.transitionToState(STATES.VICTORY);
+    } else {
+      this.transitionToState(STATES.ANALYSIS);
+    }
+  }
+
+  handleNearMissGrace() {
+    // Extend round timer by 1.5 seconds (Near-Miss Grace Call)
+    this.scoreTimer.timeLeft = Math.min(this.scoreTimer.maxTime, this.scoreTimer.timeLeft + 1.5);
+    this.scoreTimer.updateHUD();
+
+    this.cameras.main.flash(150, 255, 170, 0); // Warning Amber
+    this.showFeedback('NEAR MISS! GRACE +1.5s', '#ffaa00');
+    this.audioManager.playNearMiss();
+
+    this.runNearMisses++;
+    // Near Miss does NOT trigger a round transition, giving player a second chance!
+  }
+
   handleLockMiss() {
     const isAlive = this.scoreTimer.decrementLife();
     this.cameras.main.flash(200, 255, 51, 102); // Flash Red
     this.cameras.main.shake(150, 0.012);        // Juice Screen Shake
-    this.showFeedback('MISS! -1 LIFE', '#ff3366');
+    this.showFeedback('TOTAL MISS! -1 LIFE', '#ff3366');
     this.audioManager.playMiss();
+
+    this.runTotalMisses++;
 
     if (!isAlive) {
       this.transitionToState(STATES.GAMEOVER);
@@ -305,6 +409,8 @@ export class MainScene extends Phaser.Scene {
     this.cameras.main.shake(200, 0.015);        // Stronger Screen Shake
     this.showFeedback('TIMEOUT! -1 LIFE', '#ff3366');
     this.audioManager.playMiss();
+
+    this.runTimeouts++;
 
     if (!isAlive) {
       this.transitionToState(STATES.GAMEOVER);
@@ -340,6 +446,18 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    // Always update Jammer Presence vector drawing (even in menus/overlays)
+    let dialPosForEye = 50.0;
+    if (this.gameState === STATES.PLAYING || this.gameState === STATES.ANALYSIS) {
+      dialPosForEye = this.dialController.value;
+    }
+    this.jammerPresence.update(
+      delta, 
+      dialPosForEye, 
+      this.jammer.phase, 
+      this.gameState === STATES.ANALYSIS
+    );
+
     if (this.gameState === STATES.PLAYING) {
       const dt = delta / 1000;
       this.roundTimeElapsed += dt;
@@ -372,6 +490,7 @@ export class MainScene extends Phaser.Scene {
     }
   }
 }
+
 
 
 

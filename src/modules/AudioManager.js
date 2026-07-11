@@ -136,7 +136,7 @@ export class AudioManager {
   }
 
   /**
-   * Plays a successful signal lock sound (clear, rising double-beep)
+   * Plays a successful standard signal lock sound (clear, rising double-beep)
    */
   playLock() {
     if (!this.initialized || !this.ctx) return;
@@ -151,16 +151,72 @@ export class AudioManager {
 
     // Rising scale beep (C5 to E5 to G5)
     osc.frequency.setValueAtTime(523.25, now); // C5
-    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.setValueAtTime(0.12, now);
     
     osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
     osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
     
-    gain.gain.setValueAtTime(0.15, now + 0.16);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+    gain.gain.setValueAtTime(0.12, now + 0.16);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
     osc.start(now);
     osc.stop(now + 0.36);
+  }
+
+  /**
+   * Plays a super clean / perfect lock sound (high arpeggio chime, sine/triangle mix)
+   */
+  playCleanLock() {
+    if (!this.initialized || !this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    // Fast upward chime arpeggio (G5 to C6 to E6 to G6)
+    osc.frequency.setValueAtTime(783.99, now); // G5
+    gain.gain.setValueAtTime(0.15, now);
+    
+    osc.frequency.setValueAtTime(1046.50, now + 0.06); // C6
+    osc.frequency.setValueAtTime(1318.51, now + 0.12); // E6
+    osc.frequency.setValueAtTime(1567.98, now + 0.18); // G6
+    
+    gain.gain.setValueAtTime(0.15, now + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+    osc.start(now);
+    osc.stop(now + 0.43);
+  }
+
+  /**
+   * Plays a near-miss grace warning sound (a vibrating frequency glitch tone)
+   */
+  playNearMiss() {
+    if (!this.initialized || !this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    // Rapid pitch vibrato (wobble frequency between 240 and 260 Hz)
+    osc.frequency.setValueAtTime(250, now);
+    osc.frequency.linearRampToValueAtTime(220, now + 0.05);
+    osc.frequency.linearRampToValueAtTime(260, now + 0.10);
+    osc.frequency.linearRampToValueAtTime(230, now + 0.18);
+
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
+
+    osc.start(now);
+    osc.stop(now + 0.22);
   }
 
   /**
@@ -182,9 +238,10 @@ export class AudioManager {
     osc.frequency.linearRampToValueAtTime(60, now + 0.25);
 
     gain.gain.setValueAtTime(0.15, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
 
     osc.start(now);
     osc.stop(now + 0.3);
   }
 }
+

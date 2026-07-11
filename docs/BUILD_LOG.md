@@ -96,5 +96,36 @@ Adding tactile visual/audio feedback directly links user action to gameplay resp
 - Confirmed audio activates on click/space and correctly crossfades between terminal static and carrier tone during tuning.
 - Verified screen shake adds tactile "malfunction" weight on incorrect lock triggers.
 
+---
+
+## Session 4.5 — Depth & Hook Layer (2026-07-11)
+
+**What was set up:**
+
+- JammerPresence module (`src/modules/JammerPresence.js`): Draws an animated vector "Jammer Eye" at the top center of the screen. The eye pupil rotates and moves left/right to track the player's dial needle dynamically. The eye iris pulses faster and flares red during analysis, with color transitions reflecting the current AI Phase.
+- RunSummary module (`src/modules/RunSummary.js`): Analyzes final game statistics (Standard/Clean locks, Near-Misses, timeouts, average speed) and generates a narrative classification flavor string for the game-over screen (e.g. `SPECTRAL SPECTER`, `GLITCH MASTER`, `NOISE FLOODER`, `COGNITIVE LOCKOUT`).
+- Score-Based AI Phase Escalation in Jammer (`src/modules/Jammer.js`):
+  - **Phase 1: OBSERVE (locks 0-2):** Jammer confidence starts low. Band moves in simple slow paths.
+  - **Phase 2: ACTIVE ENGAGE (locks 3-6):** Speed limits and baseline offsets rise.
+  - **Phase 3: COGNITIVE OVERDRIVE (locks 7+):** Fast and erratic frequency swings with maximum amplitude and correction offsets.
+- Three-Tier Lock Zones in MainScene (`src/scenes/MainScene.js`):
+  - **Clean Lock (inner 22% of band):** Awards 2 points. Feedback `CLEAN LOCK! +2`. Plays high chime via AudioManager (`playCleanLock()`).
+  - **Standard Lock (remaining band area):** Awards 1 point. Feedback `SIGNAL LOCKED! +1`. Plays standard chime.
+  - **Near-Miss Grace (outside band by < 4.5 units):** Refills the round countdown timer by +1.5 seconds. Feedback `NEAR MISS! GRACE +1.5s`. Plays alert frequency vibration sound (`playNearMiss()`). Does NOT trigger round resets, giving the player a second chance.
+  - **Total Miss:** Standard penalty. Decrements life, triggers camera flash/shake and deep buzzer.
+
+**Why this order:**
+
+This design hook makes the game compelling and readable. The "AI Eye" makes the Jammer a physical presence, while the three-tier lock system (especially the near-miss grace extension) creates risk/reward tension. The RunSummary gives the player a customized terminal report at the end, prompting them to replay.
+
+**Validation:**
+
+- `npm run build` succeeds cleanly.
+- Playtested Near-Miss grace: confirming that pressing Space just outside the band properly extends the timer and plays the wobble vibrato.
+- Playtested Clean locks: verified that matching the center perfectly awards 2 score, plays high chime, and flashes cyan.
+- Verified AI Eye tracks the dial position smoothly, and cycles from Green (Phase 1) to Yellow (Phase 2) to Red (Phase 3) based on score.
+- Game Over screen displays the custom RunSummary classification correctly.
+
+
 
 

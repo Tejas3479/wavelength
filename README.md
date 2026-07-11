@@ -95,6 +95,19 @@ This project was upgraded using the Google DeepMind **Antigravity AI pair progra
 
 ---
 
+## 🏆 Credits, Disclosures & Prior Work
+
+- **Tuner Engine Core**: Upgraded from an experimental analog dial tuning codebase built with Phaser 4. 
+- **Sound Libraries & Synthesis**: Built code-side utilizing native Browser Web Audio API node grids (Oscillators, BiquadFilters, GainNodes, AnalyserNode).
+- **Competitors & Research**: Inspired by the dial matching mechanics in *Wavelength* (the board game) and the terminal console overrides in *Deus Ex* / *Hacknet*.
+- **24-Hour Window Achievements**:
+  - Implemented the adaptive opponent AI engine (`Jammer.js`) that analyzes player drift velocity and overshoot behaviors to change wave styles in real-time.
+  - Built the active command console interpreter (`TerminalCLI.js`) and shop system (`UpgradeSystem.js`).
+  - Added full skeuomorphic filters to procedural synthesizer beats (`AudioManager.js`).
+  - Implemented mobile responsive CSS screen transforms and CRT phosphor animations.
+
+---
+
 ## 📄 License
 
 MIT

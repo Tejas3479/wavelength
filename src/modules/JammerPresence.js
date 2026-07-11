@@ -46,11 +46,11 @@ export class JammerPresence {
    * @param {number} phase Active Jammer phase (1, 2, or 3)
    * @param {boolean} isAnalyzing Whether the Jammer is currently in the scan sweep state
    */
-  update(delta, playerDialValue = 50, phase = 1, isAnalyzing = false) {
+  update(delta, playerDialValue = 50, phase = 1, isAnalyzing = false, bossActive = false) {
     const dt = delta / 1000;
     
     // 1. Calculate active color
-    const baseColor = this.phaseColors[phase] || 0x00ffaa;
+    let baseColor = bossActive ? 0xff003c : (this.phaseColors[phase] || 0x00ffaa);
 
     // 2. Pulse rate escalates with phase
     const pulseSpeed = phase === 1 ? 2.5 : (phase === 2 ? 5.0 : 9.0);

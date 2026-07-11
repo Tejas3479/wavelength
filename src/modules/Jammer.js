@@ -19,6 +19,7 @@ export class Jammer {
     // Rolling history of attempts (max length N = 3)
     this.history = [];
     this.maxHistoryLength = 3;
+    this.telemetryDampening = 1.0; // modified by spectral decoy upgrade
 
     // AI Cognitive State
     this.phase = 1;
@@ -62,7 +63,8 @@ export class Jammer {
     this.currentParams = {
       baselineCenter: 50.0,
       speed: 1.5,
-      amplitude: 20.0
+      amplitude: 20.0,
+      waveShape: 'SINE'
     };
   }
 
@@ -70,20 +72,50 @@ export class Jammer {
    * Record a player attempt telemetry
    * @param {number} bias Mean(dialValue - bandCenter) during the round
    * @param {number} speed Mean(|dialValue_t - dialValue_t-1| / dt) during the round
+   * @param {number} overshoots Number of times player crossed signal band without locking
+   * @param {number} delay Time elapsed before locking occurred
    */
-  recordAttempt(bias, speed) {
-    this.history.push({ bias, speed });
+  recordAttempt(bias, speed, overshoots = 0, delay = 0) {
+    const damp = this.telemetryDampening || 1.0;
+    this.history.push({
+      bias: bias * damp,
+      speed: speed * damp,
+      overshoots: Math.round(overshoots * damp),
+      delay: delay * damp
+    });
     if (this.history.length > this.maxHistoryLength) {
       this.history.shift();
     }
   }
 
   /**
+   * Retrieves player playstyle behavior profile signature
+   * @returns {string} One of OBSERVER, JITTERER, SNIPER, PANICKED, STANDARD
+   */
+  getProfileName() {
+    if (this.history.length === 0) return 'OBSERVER';
+
+    let avgSpeed = 0;
+    let avgOvershoots = 0;
+    this.history.forEach(h => {
+      avgSpeed += h.speed;
+      avgOvershoots += (h.overshoots || 0);
+    });
+    avgSpeed /= this.history.length;
+    avgOvershoots /= this.history.length;
+
+    if (avgSpeed > 22.0 && avgOvershoots >= 1.5) {
+      return 'JITTERER';
+    } else if (avgSpeed < 14.0 && avgOvershoots <= 0.8) {
+      return 'SNIPER';
+    } else if (avgSpeed > 16.0) {
+      return 'PANICKED';
+    }
+    return 'STANDARD';
+  }
+
+  /**
    * Run the Jammer AI rules to compute the next round parameters
-   * 
-   * Rule in one sentence:
-   * "The Jammer shifts the target's movement range to the opposite side of the player's tuning bias,
-   * and increases oscillation speed if the player is adjusting too rapidly."
    * 
    * @param {number} playerScore Current player locks score
    */
@@ -100,11 +132,22 @@ export class Jammer {
     // Determine cognitive confidence
     this.confidence = Math.min(99, 20 + playerScore * 8);
 
+    const profile = this.getProfileName();
+    let waveShape = 'SINE';
+    if (profile === 'JITTERER') {
+      waveShape = 'JITTER';
+    } else if (profile === 'SNIPER') {
+      waveShape = 'SAWTOOTH';
+    } else if (profile === 'PANICKED') {
+      waveShape = 'SQUARE';
+    }
+
     if (this.history.length === 0) {
       this.currentParams = {
         baselineCenter: 50.0,
         speed: this.phase === 1 ? 1.4 : (this.phase === 2 ? 2.0 : 2.8),
-        amplitude: this.phase === 1 ? 15.0 : (this.phase === 2 ? 22.0 : 28.0)
+        amplitude: this.phase === 1 ? 15.0 : (this.phase === 2 ? 22.0 : 28.0),
+        waveShape
       };
       return this.currentParams;
     }
@@ -126,16 +169,35 @@ export class Jammer {
     const baselineCenter = Phaser.Math.Clamp(50.0 - avgBias * biasScaling, 20, 80);
 
     // Higher phases have higher base oscillation speeds
-    const baseSpeed = this.phase === 1 ? 1.0 : (this.phase === 2 ? 1.8 : 2.5);
-    const speedLimit = this.phase === 1 ? 2.5 : (this.phase === 2 ? 3.5 : 4.5);
+    let baseSpeed = this.phase === 1 ? 1.0 : (this.phase === 2 ? 1.8 : 2.5);
+    let speedLimit = this.phase === 1 ? 2.5 : (this.phase === 2 ? 3.5 : 4.5);
+
+    if (profile === 'JITTERER') {
+      baseSpeed += 0.5; // speed up wave oscillation to force accuracy issues
+      speedLimit += 0.8;
+    } else if (profile === 'PANICKED') {
+      baseSpeed += 0.3;
+      speedLimit += 0.5;
+    }
+
     const speedScale = 14.0 - this.phase * 1.5; // phase 1 = 12.5, phase 2 = 11.0, phase 3 = 9.5
     const speed = Phaser.Math.Clamp(baseSpeed + (avgSpeed / speedScale), 0.8, speedLimit);
 
-    // Higher phases swing wider
-    const baseAmp = this.phase === 1 ? 14.0 : (this.phase === 2 ? 20.0 : 25.0);
-    const amplitude = Phaser.Math.Clamp(baseAmp + (avgSpeed * 0.15), 10.0, 32.0);
+    // Amplitude adjustments
+    let baseAmp = this.phase === 1 ? 14.0 : (this.phase === 2 ? 20.0 : 25.0);
+    let maxAmp = 32.0;
 
-    this.currentParams = { baselineCenter, speed, amplitude, avgBias, avgSpeed };
+    if (profile === 'JITTERER') {
+      baseAmp -= 4.0; // small tight jumps
+      maxAmp = 18.0;
+    } else if (profile === 'SNIPER') {
+      baseAmp += 5.0; // wide sweeps
+      maxAmp = 36.0;
+    }
+
+    const amplitude = Phaser.Math.Clamp(baseAmp + (avgSpeed * 0.15), 10.0, maxAmp);
+
+    this.currentParams = { baselineCenter, speed, amplitude, waveShape, avgBias, avgSpeed };
     return this.currentParams;
   }
 
@@ -207,9 +269,10 @@ export class Jammer {
 
     if (!this.isAnalyzing) return;
 
-    // Draw horizontal scanning line with a vertical glow
+    // 1. Draw horizontal scanning line with a vertical glow
     const lineXStart = 100;
     const lineXEnd = 700;
+    const trackWidth = 600;
 
     // Sweep line fill
     this.graphics.fillStyle(0xff1144, 0.15);
@@ -222,6 +285,36 @@ export class Jammer {
     // Scan line indicator glow
     this.graphics.fillStyle(0xff3366, 0.4);
     this.graphics.fillRect(lineXStart, this.scanY - 4, 600, 8);
+
+    // 2. Draw telemetry tracking ray vectors shooting from Jammer Eye center (400, 100)
+    const eyeX = 400;
+    const eyeY = 100;
+    const targets = [];
+
+    if (this.scene.dialController) {
+      targets.push(this.scene.dialController.value);
+    }
+    if (this.scene.signalBand) {
+      targets.push(this.scene.signalBand.center);
+    }
+    
+    // Animate search sweep ticks along the line
+    targets.push(Phaser.Math.Clamp(50.0 + Math.sin(this.analysisTimer * 16.0) * 40.0, 10, 90));
+    targets.push(Phaser.Math.Clamp(this.currentParams.baselineCenter + Math.cos(this.analysisTimer * 12.0) * 20.0, 10, 90));
+
+    targets.forEach((pct, idx) => {
+      const targetX = lineXStart + (pct / 100) * trackWidth;
+      const targetY = this.trackY;
+
+      // Draw neon laser line
+      const pulseAlpha = 0.3 + 0.3 * Math.sin(this.analysisTimer * 30.0 + idx);
+      this.graphics.lineStyle(1.5, 0xff1144, pulseAlpha);
+      this.graphics.lineBetween(eyeX, eyeY, targetX, targetY);
+
+      // Draw telemetry coordinate impact point
+      this.graphics.fillStyle(0xff3366, 0.7);
+      this.graphics.fillCircle(targetX, targetY, 4.5);
+    });
   }
 
   setVisible(visible) {
@@ -239,6 +332,29 @@ export class Jammer {
     this.graphics.destroy();
     this.statusText.destroy();
     this.readoutText.destroy();
+  }
+
+  /**
+   * Returns current telemetry averages from rolling history for radar maps
+   */
+  getTelemetryAverages() {
+    if (this.history.length === 0) {
+      return { speed: 0.0, overshoots: 0.0, delay: 0.0 };
+    }
+    let speed = 0.0;
+    let overshoots = 0.0;
+    let delay = 0.0;
+    this.history.forEach(h => {
+      speed += h.speed;
+      overshoots += (h.overshoots || 0);
+      delay += (h.delay || 0);
+    });
+    const len = this.history.length;
+    return {
+      speed: speed / len,
+      overshoots: overshoots / len,
+      delay: delay / len
+    };
   }
 }
 

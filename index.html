@@ -4,22 +4,147 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="description" content="Wavelength — lock the signal before the Jammer adapts. A Parsewave Game Jam 2026 entry." />
-  <title>Wavelength</title>
+  <title>Wavelength: Hacking Terminal</title>
+  <!-- Google Font loads -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  
   <style>
+    :root {
+      --color-bg-primary: #0d0f12;
+      --color-bg-secondary: #0a0c10;
+      --color-accent-cyan: #00f0ff;
+      --color-accent-magenta: #ff007f;
+      --color-text-cyan: #00f0ff;
+    }
+    
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #0a0a0f;
-    }
-    #game-container {
-      width: 100%;
-      height: 100%;
+      background: #060709;
       display: flex;
       justify-content: center;
       align-items: center;
+      font-family: 'Space Mono', monospace;
     }
+    
+    .terminal-shell {
+      position: relative;
+      width: 800px;
+      height: 650px; /* 600px game canvas + 50px CLI bar */
+      border: 4px solid #1c212a;
+      border-radius: 8px;
+      background: var(--color-bg-primary);
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.12), inset 0 0 20px rgba(0, 0, 0, 0.95);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform-origin: center;
+      transition: transform 0.15s ease-out;
+    }
+    
+    @media (max-width: 820px) or (max-height: 670px) {
+      .terminal-shell {
+        transform: scale(min(calc(100vw / 820), calc(100vh / 670)));
+      }
+    }
+    
+    .terminal-screen {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #game-container {
+      width: 800px;
+      height: 600px;
+      background: #0a0a0f;
+    }
+    
+    #cli-container {
+      display: flex;
+      align-items: center;
+      height: 50px;
+      background: var(--color-bg-secondary);
+      border-top: 2px solid #1c212a;
+      padding: 0 15px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    #cli-container.cli-hidden {
+      opacity: 0.3;
+      background: #040507;
+    }
+    
+    #cli-container.cli-focused {
+      border-top-color: var(--color-accent-cyan);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+      opacity: 1;
+    }
+    
+    .cli-prompt {
+      color: var(--color-accent-cyan);
+      font-size: 14px;
+      font-weight: bold;
+      margin-right: 10px;
+      user-select: none;
+      font-family: 'Space Mono', monospace;
+    }
+    
+    #cli-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #f0f4f8;
+      font-family: 'Space Mono', monospace;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+    }
+    
+    #cli-input::placeholder {
+      color: #4a545e;
+    }
+    
+    /* CRT curved screen vignette and scanning holds overlay */
+    .crt-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(circle, rgba(13,15,18,0) 65%, rgba(0,0,0,0.55) 100%);
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    .scanlines {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.2) 50%
+      );
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 11;
+      opacity: 0.85;
+    }
+    
+    .screen-flicker {
+      animation: crt-flicker 0.25s infinite;
+    }
+    
+    @keyframes crt-flicker {
+      0% { opacity: 0.996; }
+      50% { opacity: 0.999; }
+      100% { opacity: 0.996; }
+    }
+    
     canvas {
       display: block;
       image-rendering: auto;
@@ -27,7 +152,57 @@
   </style>
 </head>
 <body>
-  <div id="game-container"></div>
+  <script>
+    window.addEventListener('error', function(e) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.position = 'fixed';
+      errorDiv.style.top = '0';
+      errorDiv.style.left = '0';
+      errorDiv.style.width = '100%';
+      errorDiv.style.backgroundColor = 'rgba(255, 51, 102, 0.95)';
+      errorDiv.style.color = '#ffffff';
+      errorDiv.style.padding = '20px';
+      errorDiv.style.fontFamily = 'monospace';
+      errorDiv.style.fontSize = '14px';
+      errorDiv.style.zIndex = '99999';
+      errorDiv.style.whiteSpace = 'pre-wrap';
+      errorDiv.style.overflow = 'auto';
+      errorDiv.style.maxHeight = '100%';
+      errorDiv.style.boxShadow = '0 0 20px rgba(0,0,0,0.5)';
+      errorDiv.innerHTML = '<strong>[RUNTIME ERROR]:</strong><br/>' + (e.error ? e.error.stack : e.message);
+      document.body.appendChild(errorDiv);
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.position = 'fixed';
+      errorDiv.style.top = '0';
+      errorDiv.style.left = '0';
+      errorDiv.style.width = '100%';
+      errorDiv.style.backgroundColor = 'rgba(255, 51, 102, 0.95)';
+      errorDiv.style.color = '#ffffff';
+      errorDiv.style.padding = '20px';
+      errorDiv.style.fontFamily = 'monospace';
+      errorDiv.style.fontSize = '14px';
+      errorDiv.style.zIndex = '99999';
+      errorDiv.style.whiteSpace = 'pre-wrap';
+      errorDiv.style.overflow = 'auto';
+      errorDiv.style.maxHeight = '100%';
+      errorDiv.style.boxShadow = '0 0 20px rgba(0,0,0,0.5)';
+      errorDiv.innerHTML = '<strong>[UNHANDLED REJECTION]:</strong><br/>' + (e.reason ? e.reason.stack || e.reason : e.message);
+      document.body.appendChild(errorDiv);
+    });
+  </script>
+  <div class="terminal-shell screen-flicker">
+    <div class="terminal-screen">
+      <div id="game-container"></div>
+      <div id="cli-container" class="cli-hidden">
+        <span id="cli-prompt" class="cli-prompt">CYBER_SYS:~&gt;</span>
+        <input type="text" id="cli-input" placeholder="Press ~ or / to access terminal CLI..." autocomplete="off" spellcheck="false" disabled />
+      </div>
+    </div>
+    <div class="crt-overlay"></div>
+    <div class="scanlines"></div>
+  </div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

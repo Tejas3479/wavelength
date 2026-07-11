@@ -29,6 +29,9 @@ export class SignalBand {
     this.speed = 1.5;            // Frequency of oscillation
     this.amplitude = 20.0;       // Scale of swing oscillation
     this.direction = 1;
+    
+    this.waveShape = 'SINE';     // Oscillation pattern: SINE, SQUARE, SAWTOOTH, JITTER
+    this.jitterOffset = 0.0;
 
     this.movementTime = 0.0;
     this.wavePhase = 0.0;        // Phase offset for animating the track wave
@@ -40,6 +43,7 @@ export class SignalBand {
     // Track visual start/end matching DialController
     this.trackStart = this.x - this.trackWidth / 2;
 
+    this.hazards = [];
     this.graphics = this.scene.add.graphics();
     this.reset();
   }
@@ -50,6 +54,36 @@ export class SignalBand {
   reset() {
     this.movementTime = Math.random() * 100; // Random starting phase
     this.direction = Math.random() > 0.5 ? 1 : -1;
+    this.generateHazards();
+  }
+
+  generateHazards() {
+    this.hazards = [];
+    const numHazards = this.scene.jammer.phase >= 3 ? 2 : (this.scene.jammer.phase >= 2 ? 1 : 0);
+    
+    for (let i = 0; i < numHazards; i++) {
+      let hCenter = 0;
+      let attempts = 0;
+      do {
+        hCenter = Math.random() * 80 + 10;
+        attempts++;
+      } while (Math.abs(hCenter - this.center) < 18 && attempts < 10);
+      
+      const hWidth = 8.0;
+      this.hazards.push({
+        min: hCenter - hWidth / 2,
+        max: hCenter + hWidth / 2
+      });
+    }
+  }
+
+  isNeedleInHazard(needleValue) {
+    for (let h of this.hazards) {
+      if (needleValue >= h.min && needleValue <= h.max) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -60,6 +94,7 @@ export class SignalBand {
     this.baselineCenter = params.baselineCenter;
     this.speed = params.speed;
     this.amplitude = params.amplitude;
+    this.waveShape = params.waveShape || 'SINE';
     this.reset(); // Reset starting phase
   }
 
@@ -74,8 +109,39 @@ export class SignalBand {
     // Increment wave phase to animate track ripples (speed based on jammer's frequency)
     this.wavePhase += dt * this.speed * 8.0;
 
-    // Core movement calculation: oscillate around baselineCenter
-    const oscVal = Math.sin(this.movementTime) * this.amplitude;
+    // Core movement calculation based on active wave shape
+    let oscVal = 0.0;
+    
+    switch (this.waveShape) {
+      case 'SINE':
+        oscVal = Math.sin(this.movementTime) * this.amplitude;
+        break;
+      case 'SQUARE':
+        oscVal = Math.sign(Math.sin(this.movementTime)) * this.amplitude;
+        break;
+      case 'SAWTOOTH':
+        // Linear drift in one direction, then sudden snap back
+        const sawProgress = (this.movementTime % (Math.PI * 2)) / (Math.PI * 2); // 0 to 1
+        oscVal = (sawProgress * 2.0 - 1.0) * this.amplitude;
+        break;
+      case 'JITTER':
+        // Base sine wave + sudden random displacement offsets
+        if (Math.random() < 0.08) {
+          this.jitterOffset = (Math.random() * 2.0 - 1.0) * 8.0;
+        }
+        oscVal = Math.sin(this.movementTime) * this.amplitude + (this.jitterOffset || 0.0);
+        break;
+      case 'MORPH':
+        // Morph transitions oscillating between Sine and Square shapes over time
+        const morphFactor = (Math.sin(this.movementTime * 1.5) + 1.0) / 2.0; // 0 to 1
+        const sineVal = Math.sin(this.movementTime) * this.amplitude;
+        const squareVal = Math.sign(Math.sin(this.movementTime)) * this.amplitude;
+        oscVal = (1.0 - morphFactor) * sineVal + morphFactor * squareVal;
+        break;
+      default:
+        oscVal = Math.sin(this.movementTime) * this.amplitude;
+    }
+
     this.center = this.baselineCenter + oscVal;
 
     // Clamp center position to keep the band within bounds
@@ -155,6 +221,27 @@ export class SignalBand {
     
     this.graphics.fillRect(bandX, this.y - 25, bandWidthPx, 50);
     this.graphics.strokeRect(bandX, this.y - 25, bandWidthPx, 50);
+    // 4. Draw static-heavy interference Hazard Zones (red blocks) on the track
+    if (this.hazards && this.hazards.length > 0) {
+      this.hazards.forEach(h => {
+        const hX = this.trackStart + (h.min / 100) * this.trackWidth;
+        const hW = ((h.max - h.min) / 100) * this.trackWidth;
+
+        // Draw warning hazard background (red)
+        this.graphics.fillStyle(0xff3366, 0.28);
+        this.graphics.fillRect(hX, this.y - 12, hW, 24);
+
+        // Draw hazard bracket strokes
+        this.graphics.lineStyle(1.5, 0xff3366, 0.85);
+        this.graphics.strokeRect(hX, this.y - 12, hW, 24);
+
+        // Add warning tick labels inside the blocks
+        this.graphics.lineStyle(1.0, 0xff3366, 0.5);
+        for (let lx = hX + 4; lx < hX + hW; lx += 6) {
+          this.graphics.lineBetween(lx, this.y - 8, lx - 4, this.y + 8);
+        }
+      });
+    }
   }
 
   destroy() {

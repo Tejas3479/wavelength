@@ -20,32 +20,56 @@ export class ScoreTimer {
 
     this.isTimerActive = false;
 
-    // HUD Text objects
-    this.scoreText = this.scene.add.text(20, 20, 'SCORE: 0', {
-      fontFamily: 'monospace',
-      fontSize: '20px',
-      color: '#ffffff'
+    // HUD graphic frames
+    this.hudBorderGraphics = this.scene.add.graphics();
+
+    // HUD Text objects aligned to cockpit boxes
+    this.scoreText = this.scene.add.text(25, 20, 'BYPASS GRIDS: 0', {
+      fontFamily: 'Space Mono',
+      fontSize: '14px',
+      color: '#00ffaa'
     });
 
-    this.livesText = this.scene.add.text(20, 50, 'LIVES: ❤️❤️❤️', {
-      fontFamily: 'monospace',
-      fontSize: '20px',
+    this.livesText = this.scene.add.text(25, 42, 'INTEGRITY:    ❤️❤️❤️', {
+      fontFamily: 'Space Mono',
+      fontSize: '14px',
       color: '#ff3366'
     });
 
-    this.timerText = this.scene.add.text(780, 20, 'TIME: 5.00s', {
-      fontFamily: 'monospace',
-      fontSize: '20px',
-      color: '#00ffaa',
+    this.timerText = this.scene.add.text(775, 22, 'WARP TIME: 5.00s', {
+      fontFamily: 'Space Mono',
+      fontSize: '14px',
+      color: '#00f0ff',
       align: 'right'
     }).setOrigin(1, 0);
 
     // Visual timer progress bar
     this.barGraphics = this.scene.add.graphics();
-    this.barX = 200;
-    this.barY = 25;
-    this.barWidth = 400;
-    this.barHeight = 15;
+    this.barX = 250;
+    this.barY = 24;
+    this.barWidth = 300;
+    this.barHeight = 12;
+  }
+
+  drawBracketBox(graphics, x, y, w, h, color) {
+    graphics.lineStyle(1.5, color, 0.45);
+    const len = 8;
+    // Top-left
+    graphics.lineBetween(x, y, x + len, y);
+    graphics.lineBetween(x, y, x, y + len);
+    // Top-right
+    graphics.lineBetween(x + w, y, x + w - len, y);
+    graphics.lineBetween(x + w, y, x + w, y + len);
+    // Bottom-left
+    graphics.lineBetween(x, y + h, x + len, y + h);
+    graphics.lineBetween(x, y + h, x, y + h - len);
+    // Bottom-right
+    graphics.lineBetween(x + w, y + h, x + w - len, y + h);
+    graphics.lineBetween(x + w, y + h, x + w, y + h - len);
+
+    // Dark semi-transparent dashboard panel backing
+    graphics.fillStyle(0x07090e, 0.65);
+    graphics.fillRect(x, y, w, h);
   }
 
   /**
@@ -116,35 +140,46 @@ export class ScoreTimer {
 
   updateHUD() {
     // Update texts
-    this.scoreText.setText(`SCORE: ${this.score}`);
+    this.scoreText.setText(`BYPASS GRIDS: ${this.score}`);
     
     let hearts = '';
     for (let i = 0; i < 3; i++) {
       hearts += i < this.lives ? '❤️' : '🖤';
     }
-    this.livesText.setText(`LIVES: ${hearts}`);
+    this.livesText.setText(`INTEGRITY:    ${hearts}`);
+    this.timerText.setText(`WARP TIME: ${this.timeLeft.toFixed(2)}s`);
+
+    // Redraw HUD dashboard graphics frames
+    this.hudBorderGraphics.clear();
     
-    this.timerText.setText(`TIME: ${this.timeLeft.toFixed(2)}s`);
+    // Left Cockpit Panel (Score & Lives status)
+    const leftColor = this.lives <= 1 ? 0xff3366 : 0x00ffaa;
+    this.drawBracketBox(this.hudBorderGraphics, 15, 12, 195, 52, leftColor);
+
+    // Right Cockpit Panel (Time countdown status)
+    const pct = Phaser.Math.Clamp(this.timeLeft / this.maxTime, 0, 1);
+    const rightColor = pct < 0.25 ? 0xff3366 : (pct < 0.5 ? 0xffaa00 : 0x00f0ff);
+    this.drawBracketBox(this.hudBorderGraphics, 605, 12, 180, 28, rightColor);
+
+    // Draw timer bar brackets
+    this.drawBracketBox(this.hudBorderGraphics, this.barX - 8, this.barY - 6, this.barWidth + 16, this.barHeight + 12, rightColor);
 
     // Draw timer bar
     this.barGraphics.clear();
     if (this.isTimerActive) {
-      const pct = Phaser.Math.Clamp(this.timeLeft / this.maxTime, 0, 1);
-      
-      // Background bar slot
-      this.barGraphics.fillStyle(0x222233);
+      // Background bar slot backing
+      this.barGraphics.fillStyle(0x0a0f1d, 0.7);
       this.barGraphics.fillRect(this.barX, this.barY, this.barWidth, this.barHeight);
 
-      // Active bar color changes from green -> yellow -> red
-      let color = 0x00ffaa;
-      if (pct < 0.25) {
-        color = 0xff3366; // Red
-      } else if (pct < 0.5) {
-        color = 0xffaa00; // Yellow
-      }
-
-      this.barGraphics.fillStyle(color);
+      this.barGraphics.fillStyle(rightColor);
       this.barGraphics.fillRect(this.barX, this.barY, this.barWidth * pct, this.barHeight);
+
+      // Draw vertical tick lines inside the bar slot
+      this.barGraphics.lineStyle(1.0, 0x07090e, 0.4);
+      for (let tx = 0.2; tx < 1.0; tx += 0.2) {
+        const tickX = this.barX + this.barWidth * tx;
+        this.barGraphics.lineBetween(tickX, this.barY, tickX, this.barY + this.barHeight);
+      }
     }
   }
 
@@ -153,6 +188,7 @@ export class ScoreTimer {
     this.livesText.setVisible(visible);
     this.timerText.setVisible(visible);
     this.barGraphics.setVisible(visible);
+    this.hudBorderGraphics.setVisible(visible);
   }
 
   destroy() {
@@ -160,5 +196,6 @@ export class ScoreTimer {
     this.livesText.destroy();
     this.timerText.destroy();
     this.barGraphics.destroy();
+    this.hudBorderGraphics.destroy();
   }
 }

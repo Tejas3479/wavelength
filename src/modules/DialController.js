@@ -22,6 +22,12 @@ export class DialController {
     this.value = 50.0; // Current tuning value (0 to 100)
     this.speed = 40.0; // Units per second moved by keys
 
+    // Inertia physics values
+    this.velocity = 0.0;
+    this.acceleration = 250.0; // acceleration in units/s^2
+    this.friction = 0.82;      // friction decay (smaller = slides more)
+    this.enabled = true;       // suspended during CLI console focus
+
     // Visual dimensions
     this.trackStart = this.x - this.width / 2;
     this.trackEnd = this.x + this.width / 2;
@@ -102,13 +108,28 @@ export class DialController {
   update(delta) {
     const dt = delta / 1000; // seconds
 
-    // Move left
-    if (this.cursors.left.isDown || this.keyA.isDown) {
-      this.value = Phaser.Math.Clamp(this.value - this.speed * dt, 0, 100);
+    if (this.enabled) {
+      // Keyboard input adjusts velocity instead of setting value directly
+      if (this.cursors.left.isDown || this.keyA.isDown) {
+        this.velocity -= this.acceleration * dt;
+      }
+      if (this.cursors.right.isDown || this.keyD.isDown) {
+        this.velocity += this.acceleration * dt;
+      }
     }
-    // Move right
-    if (this.cursors.right.isDown || this.keyD.isDown) {
-      this.value = Phaser.Math.Clamp(this.value + this.speed * dt, 0, 100);
+
+    // Apply friction decay (frame-rate independent based on 60fps)
+    this.velocity *= Math.pow(this.friction, dt * 60);
+
+    // Clamp speed limits
+    const maxSpeed = this.speed * 2.0;
+    this.velocity = Phaser.Math.Clamp(this.velocity, -maxSpeed, maxSpeed);
+
+    // Apply velocity to value if not dragging
+    if (!this.isDraggingNeedle && !this.isDraggingDial) {
+      this.value = Phaser.Math.Clamp(this.value + this.velocity * dt, 0, 100);
+    } else {
+      this.velocity = 0.0; // clamp velocity on direct user drags
     }
 
     this.render();

@@ -20,9 +20,9 @@ export class TerminalCLI {
   
   setupListeners() {
     if (!this.inputElement) return;
-    
+
     // Focus styling & disable dial controls
-    this.inputElement.addEventListener('focus', () => {
+    this._focusHandler = () => {
       this.containerElement.classList.add('cli-focused');
       this.containerElement.classList.remove('cli-hidden');
       if (this.scene.dialController) {
@@ -30,10 +30,11 @@ export class TerminalCLI {
         // Suspend keyboard listening inside Phaser
         this.scene.input.keyboard.enabled = false;
       }
-    });
-    
+    };
+    this.inputElement.addEventListener('focus', this._focusHandler);
+
     // Blur styling & restore dial controls
-    this.inputElement.addEventListener('blur', () => {
+    this._blurHandler = () => {
       this.containerElement.classList.remove('cli-focused');
       this.containerElement.classList.add('cli-hidden');
       // Restore keyboard listening inside Phaser
@@ -41,15 +42,16 @@ export class TerminalCLI {
       if (this.scene.dialController) {
         this.scene.dialController.enabled = true;
       }
-    });
-    
+    };
+    this.inputElement.addEventListener('blur', this._blurHandler);
+
     // Capture typed text
-    this.inputElement.addEventListener('keydown', (e) => {
+    this._keydownHandler = (e) => {
       // Play typewriter audio tick on character strokes
       if (
-        e.key !== 'Enter' && 
-        e.key !== 'Escape' && 
-        e.key !== 'ArrowUp' && 
+        e.key !== 'Enter' &&
+        e.key !== 'Escape' &&
+        e.key !== 'ArrowUp' &&
         e.key !== 'ArrowDown' &&
         e.key !== 'Shift' &&
         e.key !== 'Control' &&
@@ -59,7 +61,7 @@ export class TerminalCLI {
           this.scene.audioManager.playKeyClick();
         }
       }
-      
+
       if (e.key === 'Tab') {
         e.preventDefault();
         this.autocompleteCommand();
@@ -91,7 +93,8 @@ export class TerminalCLI {
         }
         e.preventDefault();
       }
-    });
+    };
+    this.inputElement.addEventListener('keydown', this._keydownHandler);
     
     // Hook up key listeners inside Phaser to focus input field on `~` or `/`
     this.scene.input.keyboard.on('keydown-BACKTICK', (event) => {
@@ -138,6 +141,15 @@ export class TerminalCLI {
       this.inputElement.disabled = true;
       this.inputElement.blur();
       this.containerElement.classList.add('cli-hidden');
+    }
+  }
+
+  destroy() {
+    // Clean up DOM event listeners
+    if (this.inputElement) {
+      this.inputElement.removeEventListener('focus', this._focusHandler);
+      this.inputElement.removeEventListener('blur', this._blurHandler);
+      this.inputElement.removeEventListener('keydown', this._keydownHandler);
     }
   }
   
@@ -272,13 +284,14 @@ export class TerminalCLI {
     }
 
     const commandsList = [
-      '/help', 
-      '/diagnose', 
-      '/spoof', 
-      '/overclock', 
-      '/shield', 
-      '/emp', 
-      '/decrypt', 
+      '/help',
+      '/diagnose',
+      '/spoof',
+      '/overclock',
+      '/shield',
+      '/emp',
+      '/scan',
+      '/decrypt',
       '/submit',
       '/endless'
     ];

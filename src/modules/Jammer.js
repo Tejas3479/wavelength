@@ -147,7 +147,9 @@ export class Jammer {
         baselineCenter: 50.0,
         speed: this.phase === 1 ? 1.4 : (this.phase === 2 ? 2.0 : 2.8),
         amplitude: this.phase === 1 ? 15.0 : (this.phase === 2 ? 22.0 : 28.0),
-        waveShape
+        waveShape,
+        avgBias: 0.0,
+        avgSpeed: 15.0
       };
       return this.currentParams;
     }
@@ -272,7 +274,6 @@ export class Jammer {
     // 1. Draw horizontal scanning line with a vertical glow
     const lineXStart = 100;
     const lineXEnd = 700;
-    const trackWidth = 600;
 
     // Sweep line fill
     this.graphics.fillStyle(0xff1144, 0.15);

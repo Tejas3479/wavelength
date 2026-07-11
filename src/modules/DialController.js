@@ -48,10 +48,16 @@ export class DialController {
   }
 
   setupInputs() {
-    // Keyboard inputs
-    this.cursors = this.scene.input.keyboard.createCursorKeys();
-    this.keyA = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.keyD = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    // Keyboard inputs (with null guard for touch-only devices)
+    if (this.scene.input && this.scene.input.keyboard) {
+      this.cursors = this.scene.input.keyboard.createCursorKeys();
+      this.keyA = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+      this.keyD = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    } else {
+      this.cursors = { left: { isDown: false }, right: { isDown: false } };
+      this.keyA = { isDown: false };
+      this.keyD = { isDown: false };
+    }
 
     // Mouse/Touch pointer input
     this.scene.input.on('pointerdown', (pointer) => {
@@ -185,5 +191,12 @@ export class DialController {
 
   destroy() {
     this.graphics.destroy();
+
+    // Clean up input listeners
+    if (this.scene && this.scene.input) {
+      this.scene.input.off('pointerdown');
+      this.scene.input.off('pointermove');
+      this.scene.input.off('pointerup');
+    }
   }
 }

@@ -113,6 +113,7 @@ export class MainScene extends Phaser.Scene {
 
     // Upgrade state variables
     this.shields = 0;
+    this.upgradeCount = 0; // Track upgrades separately from score
     this.hasOverclock = false;
     this.isOverclockActive = false;
     this.overclockTimer = 0.0;
@@ -386,14 +387,23 @@ export class MainScene extends Phaser.Scene {
       this.shields = 0;
       this.hasOverclock = false;
       this.isOverclockActive = false;
+      this.overclockTimer = 0.0;
       this.hasEMP = false;
       this.isEMPActive = false;
+      this.empActiveTimer = 0.0;
       this.empCooldown = 0.0;
+      this.savedBandSpeed = 1.5;
+      this.isEndlessMode = false;
+      this.upgradeCount = 0;
 
       this.comboMultiplier = 1;
       this.consecutiveLocks = 0;
       this.isBossGravityActive = false;
       this.isScanActive = false;
+      this.isDecryptionActive = false;
+      this.decryptionKeys = [];
+      this.decryptionCorrectKey = '';
+      this.decryptionAttempts = 0;
       if (this.scanGraphics) this.scanGraphics.clear();
       EventBus.emit('ROUND_RESET');
       
@@ -522,14 +532,17 @@ export class MainScene extends Phaser.Scene {
 
     this.jammer.startAnalysis(this.scoreTimer.score, (newParams) => {
       this.signalBand.applyJammerParams(newParams);
-      
+
+      // Save original speed before any modifications for proper restoration
+      const originalSpeed = this.signalBand.speed;
+
       // Preserve overclock and EMP speed scaling across transitions
       if (this.isOverclockActive) {
-        this.savedBandSpeed = this.signalBand.speed;
+        this.savedBandSpeed = originalSpeed;
         this.signalBand.speed *= 2.0;
       }
       if (this.isEMPActive) {
-        this.savedBandSpeed = this.signalBand.speed;
+        this.savedBandSpeed = originalSpeed;
         this.signalBand.speed = 0.0;
       }
       
@@ -618,11 +631,12 @@ export class MainScene extends Phaser.Scene {
     }
 
     this.logTerminal(`[+] Lock streak: ${this.consecutiveLocks} consecutive locks! (Combo: x${this.comboMultiplier})`);
-    
+
     // Broadcast event to EventBus
     EventBus.emit('COMBO_UPDATED', this.comboMultiplier);
 
     this.runCleanLocks++;
+    this.upgradeCount++;
     this.checkProgressTransitions();
   }
 
@@ -649,6 +663,7 @@ export class MainScene extends Phaser.Scene {
     EventBus.emit('COMBO_UPDATED', this.comboMultiplier);
 
     this.runStandardLocks++;
+    this.upgradeCount++;
     this.checkProgressTransitions();
   }
 
@@ -736,7 +751,7 @@ export class MainScene extends Phaser.Scene {
   checkProgressTransitions() {
     if (this.scoreTimer.score >= 10 && !this.isEndlessMode) {
       this.transitionToState(STATES.VICTORY);
-    } else if (this.scoreTimer.score > 0 && this.scoreTimer.score % 3 === 0) {
+    } else if (this.upgradeCount > 0 && this.upgradeCount % 3 === 0) {
       this.transitionToState(STATES.UPGRADE);
     } else {
       this.transitionToState(STATES.ANALYSIS);
@@ -989,7 +1004,6 @@ export class MainScene extends Phaser.Scene {
       if (this.radarGraphics) this.radarGraphics.clear();
       if (this.gaugeGraphics) this.gaugeGraphics.clear();
       if (this.scanGraphics) this.scanGraphics.clear();
-      if (this.radarSweepGraphics) this.radarSweepGraphics.clear();
     }
 
     if (this.gameState === STATES.PLAYING) {
@@ -1342,6 +1356,51 @@ export class MainScene extends Phaser.Scene {
     const c1 = list[Math.floor(Math.random() * list.length)];
     const c2 = list[Math.floor(Math.random() * list.length)];
     return '0x' + c1 + c2;
+  }
+
+  /**
+   * Cleanup method to prevent memory leaks on scene restart
+   */
+  destroy() {
+    // Clean up AudioManager
+    if (this.audioManager && this.audioManager.destroy) {
+      this.audioManager.destroy();
+    }
+
+    // Clean up DialController
+    if (this.dialController && this.dialController.destroy) {
+      this.dialController.destroy();
+    }
+
+    // Clean up TerminalCLI
+    if (this.terminalCLI && this.terminalCLI.destroy) {
+      this.terminalCLI.destroy();
+    }
+
+    // Clean up Jammer
+    if (this.jammer && this.jammer.destroy) {
+      this.jammer.destroy();
+    }
+
+    // Clean up JammerPresence
+    if (this.jammerPresence && this.jammerPresence.destroy) {
+      this.jammerPresence.destroy();
+    }
+
+    // Clean up SignalBand
+    if (this.signalBand && this.signalBand.destroy) {
+      this.signalBand.destroy();
+    }
+
+    // Clean up ScoreTimer
+    if (this.scoreTimer && this.scoreTimer.destroy) {
+      this.scoreTimer.destroy();
+    }
+
+    // Clean up UpgradeSystem
+    if (this.upgradeSystem && this.upgradeSystem.destroy) {
+      this.upgradeSystem.destroy();
+    }
   }
 }
 

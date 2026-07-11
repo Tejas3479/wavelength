@@ -1,8 +1,6 @@
-import Phaser from 'phaser';
-
 /**
  * UpgradeSystem
- * 
+ *
  * Manages the Roguelite Upgrade Terminal.
  * Renders 3 cards containing hardware modifications on the Phaser canvas.
  * Handles hovering, highlights, and selection logic, modifying dial, band,
@@ -33,7 +31,9 @@ export class UpgradeSystem {
         description: 'Modulates signal band aperture.\nIncreases target signal band width\nby +25% permanently.',
         color: '#00f0ff',
         action: (s) => {
-          s.signalBand.width *= 1.25;
+          // Cap at reasonable maximum to prevent trivializing difficulty
+          const maxWidth = 18.0;
+          s.signalBand.width = Math.min(maxWidth, s.signalBand.width * 1.25);
           s.logTerminal('FIRMWARE INSTALLED: Resonance Stabilizer. Tuner aperture widened.');
         }
       },

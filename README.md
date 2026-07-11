@@ -11,10 +11,10 @@
 **Wavelength** is a retro-analog hacking terminal arcade game built in HTML5 and synthesized in real-time. You are an operator attempting to lock a sliding signal frequency into an oscillating target band. 
 
 But there's a catch: the **AI Jammer** is watching you. It tracks your needle rotation speed, reaction delay, and target overshoots over attempts. It classifies your playstyle signature:
-- **Jitterer** (frantic tapping) $\rightarrow$ Counters with quick, chaotic **Jitter waves**.
-- **Sniper** (slow calibration) $\rightarrow$ Counters with wide, sliding **Sawtooth waves**.
-- **Panicked Tuner** (time-pressured swipes) $\rightarrow$ Counters with sudden, instant **Square wave jumps**.
-- **Standard Operator** $\rightarrow$ Counters with smooth **Sine wave oscillations**.
+- **Jitterer** (frantic tapping) → Counters with quick, chaotic **Jitter waves**.
+- **Sniper** (slow calibration) → Counters with wide, sliding **Sawtooth waves**.
+- **Panicked Tuner** (time-pressured swipes) → Counters with sudden, instant **Square wave jumps**.
+- **Standard Operator** → Counters with smooth **Sine wave oscillations**.
 
 To survive, you must steer the dial, type bypass scripts in the command-line console, and install hardware firmwares in a roguelite upgrade shop!
 

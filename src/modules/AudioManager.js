@@ -349,7 +349,7 @@ export class AudioManager {
       }
     }
 
-    // 3. Synthesize Snare Drum (Backbeat noise burst on steps 2 and 6)
+    // 4. Synthesize Snare Drum (Backbeat noise burst on steps 2 and 6)
     if (step === 2 || step === 6) {
       const bufferSize = this.ctx.sampleRate * 0.1; // 100ms burst
       const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -528,6 +528,28 @@ export class AudioManager {
 
     osc.start(now);
     osc.stop(now + 0.025);
+  }
+
+  /**
+   * Cleanup method to prevent memory leaks on scene restart
+   */
+  destroy() {
+    // Stop sequencer interval
+    if (this.isPlayingSequencer && this.schedulerTimer) {
+      clearInterval(this.schedulerTimer);
+      this.schedulerTimer = null;
+      this.isPlayingSequencer = false;
+    }
+
+    // Remove EventBus listeners
+    EventBus.off('COMBO_UPDATED');
+    EventBus.off('LOCK_MISS');
+    EventBus.off('ROUND_RESET');
+
+    // Close audio context
+    if (this.ctx && this.ctx.state !== 'closed') {
+      this.ctx.close();
+    }
   }
 }
 

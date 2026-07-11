@@ -1,8 +1,6 @@
-import Phaser from 'phaser';
-
 /**
  * JammerPresence
- * 
+ *
  * Renders an animated retro vector "Jammer Eye" at the top center of the screen.
  * Tracks the player's dial needle in real-time, changes colors based on the active
  * AI Phase, and pulses dynamically to showcase the Jammer's cognitive intensity.

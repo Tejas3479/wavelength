@@ -26,5 +26,31 @@ Every hour lost to tooling failure late in the 24-hour window is unrecoverable. 
 
 - `npm install` completed without errors.
 - `npm run dev` launched the Vite dev server; blank canvas with confirmation text rendered in Chrome at `http://localhost:3000`.
-- `npm run build` produced a `dist/` folder; opening `dist/index.html` directly in the browser rendered the same canvas correctly (no CORS errors, no broken paths).
 - No console errors in either mode.
+
+---
+
+## Session 2 — Core Loop (2026-07-11)
+
+**What was set up:**
+
+- DialController (`src/modules/DialController.js`): Tracks player dial inputs from 0 to 100. Supports keyboard (arrow keys and A/D keys) and mouse/touch pointer dragging. The needle and dial are rendered visually using clean Phaser graphics placeholders.
+- SignalBand (`src/modules/SignalBand.js`): Tracks the target signal band center (0 to 100) and width. Implements sinusoidal back-and-forth movement across the track. Includes hit collision check: `contains(value)`.
+- ScoreTimer (`src/modules/ScoreTimer.js`): Tracks score (successful locks), lives (starts at 3), and countdown timer (starts at 5.0 seconds). Renders HUD texts and a visual timer bar that shrinks and changes color as it gets close to expiring.
+- Integrated State Machine in MainScene (`src/scenes/MainScene.js`): Wires the modules together into a complete game loop:
+  - `TITLE` state: displays name, instructions, and click-to-start.
+  - `PLAYING` state: updates inputs, moves target band, decrements timer, checks lock attempts (SPACE or on-screen click of the "LOCK SIGNAL" button). Includes a screen flash (green for success, red for miss/timeout) and floating feedback text.
+  - `GAME_OVER` and `VICTORY` states: triggered on 0 lives and 10 score respectively, with simple overlays to restart the loop.
+
+**Why this order:**
+
+Getting the ugly core gameplay loop working before adding any advanced logic or art styling is crucial for verifying the mechanics. It proves that collision boundaries feel right, keyboard/mouse input scaling is correct, and states transition cleanly.
+
+**Validation:**
+
+- `npm run build` succeeds without issues.
+- Confirmed that index.html boots, correctly renders the title overlay, and transitions to gameplay.
+- Confirmed that keyboard and mouse dragging both adjust the dial needle.
+- Confirmed that hitting Space within the band increments the score and flashes teal/green.
+- Confirmed that missing or timeout flashes red, subtracts a life, and triggers game-over at 0 lives.
+
